@@ -1,0 +1,36 @@
+"""Uygulama ayarları. Tüm değerler ortam değişkenleriyle (.env) değiştirilebilir."""
+from functools import lru_cache
+
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+class Settings(BaseSettings):
+    model_config = SettingsConfigDict(env_file=".env", env_prefix="GA_", extra="ignore")
+
+    # Veritabanı: geliştirmede SQLite, kurulumda PostgreSQL URL'si verilebilir.
+    database_url: str = "sqlite:///./gorev_asistani.db"
+
+    # Kurum kimliği (beyaz etiket): arayüz bu değerleri /api/org üzerinden okur.
+    org_name: str = "Kurum Adı"
+    org_accent: str = "#1F4FD1"
+    org_logo_url: str = ""  # boşsa arayüz logo yer tutucusunu gösterir
+
+    # LLM katmanı. Mimari netleşene kadar "mock" sağlayıcı kullanılıyor.
+    llm_provider: str = "mock"
+    llm_model_label: str = "Yerel model (mock)"
+
+    # Sprint kapasitesi (kişi başı iş günü) — yük yüzdesi bunun üzerinden hesaplanır.
+    sprint_capacity_days: float = 10.0
+
+    # Geliştirme: frontend ayrı portta çalışırken CORS izni.
+    cors_origins: str = "http://localhost:5173"
+
+    # Üretimde derlenmiş frontend'in yolu (Docker imajında doldurulur).
+    frontend_dist: str = "../frontend/dist"
+
+    seed_demo_data: bool = True
+
+
+@lru_cache
+def get_settings() -> Settings:
+    return Settings()

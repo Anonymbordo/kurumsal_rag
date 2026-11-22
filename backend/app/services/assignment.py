@@ -1,0 +1,104 @@
+"""Kişi önerisi.
+
+Bilinçli olarak LLM'den ayrı, açıklanabilir bir puanlama: her öneri, liderin
+görebileceği gerekçelere (uzmanlık eşleşmesi, geçmiş benzer işler, iş yükü)
+dayanır. Ağırlıklar ve eşikler kurum verisiyle ayarlanmalıdır.
+"""
+from dataclasses import dataclass
+
+from sqlalchemy import select
+from sqlalchemy.orm import Session
+
+from ..models import Task, User
+from .load import load_pct
+
+TAG_LABELS = {
+    "backend": "backend",
+    "mobile": "mobil",
+    "ios": "iOS",
+    "qa": "test/QA",
+    "security": "güvenlik",
+    "devops": "DevOps",
+    "frontend": "arayüz",
+    "general": "genel",
+}
+
+W_SKILL, W_HISTORY, W_LOAD = 0.5, 0.3, 0.2
+OVERLOAD_PCT = 90
+CAPACITY_LIMIT_PCT = 85
+
+
+@dataclass
+class Candidate:
+    user: User
+    score: float
+    skill: float
+    history_count: int
+    load: int
+    matched: list[str]
+
+
+@dataclass
+class Suggestion:
+    assignee_id: str | None
+    alt_assignee_id: str | None
+    confidence: int  # 1 düşük, 2 orta, 3 yüksek
+    reasons: list[str]
+
+
+def _history_count(db: Session, user_id: str, tags: list[str]) -> int:
+    done = db.scalars(select(Task).where(Task.assignee_id == user_id, Task.status == "done"))
+    return sum(1 for t in done if set(t.tags) & set(tags))
+
+
+def rank_candidates(db: Session, team_id: str, tags: list[str]) -> list[Candidate]:
+    members = db.scalars(select(User).where(User.team_id == team_id, User.is_lead.is_(False))).all()
+    tagset = set(tags) - {"general"}
+    out: list[Candidate] = []
+    for u in members:
+        matched = sorted(tagset & set(u.skills))
+        skill = len(matched) / len(tagset) if tagset else 0.0
+        hist = _history_count(db, u.id, list(tagset))
+        load = load_pct(db, u)
+        score = W_SKILL * skill + W_HISTORY * min(hist, 4) / 4 + W_LOAD * max(0.0, 1 - load / 100)
+        out.append(Candidate(u, round(score, 4), skill, hist, load, matched))
+    out.sort(key=lambda c: c.score, reverse=True)
+    return out
+
+
+def _confidence(ranked: list[Candidate]) -> int:
+    if not ranked:
+        return 1
+    top = ranked[0]
+    margin = top.score - (ranked[1].score if len(ranked) > 1 else 0.0)
+    if top.skill == 0 or top.score < 0.35 or margin < 0.05:
+        return 1
+    if top.score >= 0.6 and margin >= 0.15:
+        return 3
+    return 2
+
+
+def _reasons(c: Candidate) -> list[str]:
+    reasons: list[str] = []
+    if c.matched:
+        reasons.append("Uzmanlık alanı eşleşiyor: " + ", ".join(TAG_LABELS.get(t, t) for t in c.matched))
+    else:
+        reasons.append("Uzmanlık alanı doğrudan eşleşmiyor")
+    if c.history_count:
+        reasons.append(f"Bu alanda {c.history_count} benzer görevi tamamladı")
+    else:
+        reasons.append("Bu alanda geçmiş işi az")
+    reasons.append(f"Sprint yükü %{c.load}")
+    return reasons
+
+
+def suggest(db: Session, team_id: str, tags: list[str]) -> Suggestion:
+    ranked = rank_candidates(db, team_id, tags)
+    if not ranked:
+        return Suggestion(None, None, 1, ["Ekipte uygun kişi bulunamadı"])
+    top = ranked[0]
+    alt = None
+    if top.load >= OVERLOAD_PCT:
+        free = [c for c in ranked[1:] if c.load < CAPACITY_LIMIT_PCT]
+        alt = next((c for c in free if c.skill > 0), free[0] if free else None)
+    return Suggestion(top.user.id, alt.user.id if alt else None, _confidence(ranked), _reasons(top))

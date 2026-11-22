@@ -1,0 +1,7 @@
+Mobil Bankacılık — Sprint 15 Planlama Notu
+§1 Hedef. Bu sprintte kampanya dönemi öncesi performans ve güvenlik iyileştirmeleri tamamlanacak.
+§2 Hesap hareketleri. Hesap hareketleri API'si sayfalama desteğiyle yeniden yazılmalı.
+§3 Android. Android uygulamasında bildirim tıklandığında uygulama çöküyor; hata kaydı ektedir.
+§4 Güvenlik. Oturum belirteçlerinin süresi 15 dakikaya indirilmeli ve yenileme akışı güncellenmeli.
+§5 Test. Kampanya öncesi yük testi yapılmalı ve sonuçlar raporlanmalı.
+§6 Altyapı. Canlı ortam için otomatik ölçekleme kuralı devreye alınmalı.
