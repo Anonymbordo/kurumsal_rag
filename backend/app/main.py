@@ -7,7 +7,7 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from .config import get_settings
-from .db import Base, SessionLocal, engine
+from .db import Base, SessionLocal, add_missing_columns, engine
 from .routers import chat, documents, org, tasks, team
 from .seed import seed
 
@@ -18,6 +18,7 @@ settings = get_settings()
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     Base.metadata.create_all(engine)
+    add_missing_columns(engine)
     if settings.seed_demo_data:
         with SessionLocal() as db:
             seed(db)

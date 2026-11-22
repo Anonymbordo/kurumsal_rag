@@ -94,6 +94,9 @@ class Task(Base):
     alt_assignee_id: Mapped[str | None] = mapped_column(ForeignKey("users.id"), nullable=True)
     confidence: Mapped[int] = mapped_column(Integer, default=2)  # 1 düşük, 2 orta, 3 yüksek
     reasons: Mapped[list] = mapped_column(JSON, default=list)
+    detect_score: Mapped[float | None] = mapped_column(Float, nullable=True)  # "görev mi" olasılığı
+    workstream: Mapped[str | None] = mapped_column(String(120), nullable=True)  # HDBSCAN küme adı
+    is_outlier: Mapped[bool] = mapped_column(Boolean, default=False)  # hiçbir kümeye girmedi
 
     # Karar
     status: Mapped[str] = mapped_column(String(20), default="suggested")

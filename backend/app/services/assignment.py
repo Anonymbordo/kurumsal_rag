@@ -20,10 +20,13 @@ TAG_LABELS = {
     "security": "güvenlik",
     "devops": "DevOps",
     "frontend": "arayüz",
+    "docs": "dokümantasyon",
     "general": "genel",
 }
 
 W_SKILL, W_HISTORY, W_LOAD = 0.5, 0.3, 0.2
+# Anlamsal benzerlik varken (encoder sağlayıcısı) ağırlıklar
+W_SKILL_S, W_HISTORY_S, W_SEM_S, W_LOAD_S = 0.35, 0.15, 0.3, 0.2
 OVERLOAD_PCT = 90
 CAPACITY_LIMIT_PCT = 85
 
@@ -36,6 +39,8 @@ class Candidate:
     history_count: int
     load: int
     matched: list[str]
+    sem_sim: float | None = None  # en benzer geçmiş işine kosinüs benzerliği
+    sem_example: str | None = None  # o işin kısa adı
 
 
 @dataclass
@@ -51,17 +56,31 @@ def _history_count(db: Session, user_id: str, tags: list[str]) -> int:
     return sum(1 for t in done if set(t.tags) & set(tags))
 
 
-def rank_candidates(db: Session, team_id: str, tags: list[str]) -> list[Candidate]:
+SemanticMap = dict[str, tuple[float, str]]  # user_id -> (en yüksek benzerlik, o işin adı)
+
+
+def rank_candidates(
+    db: Session, team_id: str, tags: list[str], semantic: SemanticMap | None = None
+) -> list[Candidate]:
     members = db.scalars(select(User).where(User.team_id == team_id, User.is_lead.is_(False))).all()
     tagset = set(tags) - {"general"}
+    sims = {u.id: (semantic or {}).get(u.id, (0.0, ""))[0] for u in members}
+    lo, hi = (min(sims.values()), max(sims.values())) if sims else (0.0, 0.0)
     out: list[Candidate] = []
     for u in members:
         matched = sorted(tagset & set(u.skills))
         skill = len(matched) / len(tagset) if tagset else 0.0
         hist = _history_count(db, u.id, list(tagset))
         load = load_pct(db, u)
-        score = W_SKILL * skill + W_HISTORY * min(hist, 4) / 4 + W_LOAD * max(0.0, 1 - load / 100)
-        out.append(Candidate(u, round(score, 4), skill, hist, load, matched))
+        free = max(0.0, 1 - load / 100)
+        if semantic:
+            sem = (sims[u.id] - lo) / (hi - lo) if hi > lo else 0.0  # adaylar arasında 0–1'e ölçekle
+            score = W_SKILL_S * skill + W_HISTORY_S * min(hist, 4) / 4 + W_SEM_S * sem + W_LOAD_S * free
+            sim, example = semantic.get(u.id, (None, None))
+        else:
+            score = W_SKILL * skill + W_HISTORY * min(hist, 4) / 4 + W_LOAD * free
+            sim, example = None, None
+        out.append(Candidate(u, round(score, 4), skill, hist, load, matched, sim, example or None))
     out.sort(key=lambda c: c.score, reverse=True)
     return out
 
@@ -88,12 +107,14 @@ def _reasons(c: Candidate) -> list[str]:
         reasons.append(f"Bu alanda {c.history_count} benzer görevi tamamladı")
     else:
         reasons.append("Bu alanda geçmiş işi az")
+    if c.sem_sim is not None and c.sem_example:
+        reasons.append(f"En benzer geçmiş işi: {c.sem_example} (benzerlik %{round(c.sem_sim * 100)})")
     reasons.append(f"Sprint yükü %{c.load}")
     return reasons
 
 
-def suggest(db: Session, team_id: str, tags: list[str]) -> Suggestion:
-    ranked = rank_candidates(db, team_id, tags)
+def suggest(db: Session, team_id: str, tags: list[str], semantic: SemanticMap | None = None) -> Suggestion:
+    ranked = rank_candidates(db, team_id, tags, semantic)
     if not ranked:
         return Suggestion(None, None, 1, ["Ekipte uygun kişi bulunamadı"])
     top = ranked[0]

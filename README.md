@@ -4,7 +4,7 @@ Kurum içinde çalışan (on-prem) bir görevlendirme asistanı. Takım lideri b
 
 **Veri kurum dışına çıkmaz:** model, veritabanı ve arayüz kurumun kendi sunucusunda çalışır; dış API çağrısı yoktur.
 
-> Durum: v0.1 — arayüz, API, öneri mantığı ve onay akışı çalışıyor. **LLM katmanı şimdilik `mock`** (kural tabanlı). Gerçek model mimarisi ayrıca tasarlanacak; bağlanma noktası `backend/app/llm/`.
+> Durum: v0.2 — arayüz, API, öneri ve onay akışı çalışıyor. Görev çıkarma için iki sağlayıcı var: kural tabanlı `mock` ve eğitimsiz `encoder` (embedding + HDBSCAN). Metin üreten model (kısa başlık, sohbet) sonraki aşama.
 
 ## Ekranlar
 
@@ -53,13 +53,33 @@ npm run dev               # http://localhost:5173  (/api istekleri 8000'e yönle
 
 Testler: `cd backend && pytest`
 
+## Encoder modu (eğitimsiz, CPU)
+
+Önceden eğitilmiş, **dondurulmuş** bir cümle-embedding modeli kullanılır; model eğitilmez.
+
+1. **Görev tespiti:** her cümle, örnek görev / görev olmayan cümlelere (`app/ml/prototypes.py`) benzerlik farkıyla puanlanır → `detect_score` (0–1).
+2. **Alan etiketi:** etiket açıklamalarına benzerlik (backend, mobil, güvenlik…).
+3. **Kişi önerisi:** uzmanlık + geçmiş iş + **en benzer geçmiş işe anlamsal benzerlik** + yük.
+4. **İş alanları:** yeni görevler ekibin geçmiş işleriyle birlikte **HDBSCAN** ile kümelenir, kümeler c-TF-IDF ile adlandırılır.
+5. **Aykırılar:** hiçbir kümeye girmeyen görev "alışılmadık" sayılır, güveni bir kademe düşer → lider önce kendi seçimini yapar. Az veride HDBSCAN yalnız noktaları kümeye çekebildiği için en-yakın-komşu benzerliğine dayalı robust z-skorla tamamlanır.
+
+```powershell
+cd backend
+pip install -r requirements-ml.txt        # sentence-transformers (ilk çalıştırmada model iner)
+python scripts/evaluate.py --verbose      # mock ile encoder'ı karşılaştır
+# .env: GA_LLM_PROVIDER=encoder
+```
+
+Model seçimi: `GA_EMBED_MODEL` ile değişir. `gte-small` gibi modeller ağırlıklı İngilizce eğitildiği için Türkçede çok dilli modellerle (ör. `intfloat/multilingual-e5-small`, `-base`) karşılaştırılmalı; `scripts/evaluate.py` bunun için. Değerlendirme seti şu an küçük ve örnek dokümanlardan oluşuyor; gerçek dokümanlar ve etiketler eklendikçe anlamlılaşır.
+
 ## Mimari
 
 ```
 frontend/  React + TypeScript + Vite
 backend/
   app/
-    llm/            LLM sağlayıcı arayüzü (base.py) + mock sağlayıcı
+    llm/            sağlayıcı arayüzü (base.py), mock, encoder
+    ml/             embedding, prototipler, HDBSCAN kümeleme
     services/
       extraction.py   doküman → görev
       assignment.py   açıklanabilir kişi önerisi (uzmanlık, geçmiş iş, yük)

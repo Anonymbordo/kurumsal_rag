@@ -43,6 +43,9 @@ export interface Task {
   confidence: 1 | 2 | 3
   forcing: boolean
   reasons: string[]
+  detect_score: number | null
+  workstream: string | null
+  is_outlier: boolean
   status: 'suggested' | 'accepted' | 'rejected' | 'exported' | 'done'
   status_label: string
   lead_picked_first: boolean

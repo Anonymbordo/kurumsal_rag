@@ -273,3 +273,5 @@ a { color: var(--primary); }
 .logo-img.lg { height: 150px; width: auto; max-width: min(460px, 90%); object-fit: contain; }
 .topbar .logo-img.sm { height: 30px; }
 .home .logo-img.lg { margin-bottom: 4px; }
+.ws-chip { font-size: 12px; font-weight: 600; color: var(--ink-2); background: #eef1f5; border-radius: 999px; padding: 3px 10px; }
+.ws-chip.odd { color: var(--warn-ink); background: var(--warn-bg); }

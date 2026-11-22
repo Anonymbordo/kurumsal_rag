@@ -65,6 +65,8 @@ function TaskCard({ t, members, canDecide, focused, onFocus, onDecide }: CardPro
           </div>
         </div>
         <div className="task-meta">
+          {t.workstream && <span className="ws-chip" title="HDBSCAN ile bulunan iş alanı">{t.workstream}</span>}
+          {t.is_outlier && <span className="ws-chip odd" title="Ekipte benzeri yapılmamış görev">Alışılmadık</span>}
           <span>Tahmini {t.est_days} gün</span>
           <span aria-hidden="true">·</span>
           <button type="button" className="btn small" onClick={onFocus}>Kaynak {t.source.ref}</button>

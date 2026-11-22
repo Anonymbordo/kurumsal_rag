@@ -1,0 +1,5 @@
+# Encoder sağlayıcısı için (GA_LLM_PROVIDER=encoder). CPU yeterli.
+# CPU'ya özel, daha küçük PyTorch için önce:
+#   pip install torch --index-url https://download.pytorch.org/whl/cpu
+-r requirements.txt
+sentence-transformers>=3.0

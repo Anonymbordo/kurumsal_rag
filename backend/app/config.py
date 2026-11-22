@@ -18,7 +18,11 @@ class Settings(BaseSettings):
     org_logo_url: str = ""  # boşsa arayüz logo yer tutucusunu gösterir
 
     # LLM katmanı. Mimari netleşene kadar "mock" sağlayıcı kullanılıyor.
-    llm_provider: str = "mock"
+    llm_provider: str = "mock"  # mock | encoder
+    # encoder sağlayıcısının embedding modeli (Hugging Face adı) ya da "hashing" (indirme yok)
+    embed_model: str = "intfloat/multilingual-e5-small"
+    # Kümeleme: bir iş alanı en az kaç görevden oluşsun
+    cluster_min_size: int = 2
     llm_model_label: str = "Yerel model (mock)"
 
     # Sprint kapasitesi (kişi başı iş günü) — yük yüzdesi bunun üzerinden hesaplanır.

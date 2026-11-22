@@ -21,6 +21,7 @@ class ExtractedTask:
     source_quote: str = ""  # dokümandan birebir alıntı
     source_start: int = -1  # alıntının dokümandaki karakter konumu
     source_end: int = -1
+    detect_score: float | None = None  # modelin "bu bir görev" olasılığı (0–1); kural tabanlıda yok
 
 
 @dataclass

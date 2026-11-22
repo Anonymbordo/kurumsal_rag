@@ -1,5 +1,7 @@
 from ..config import get_settings
 from .base import ChatTurn, ExtractedTask, LLMProvider
+from functools import lru_cache
+
 from .mock import MockProvider
 
 __all__ = ["ChatTurn", "ExtractedTask", "LLMProvider", "get_provider"]
@@ -15,6 +17,15 @@ def get_provider() -> LLMProvider:
     name = get_settings().llm_provider
     if name == "mock":
         return MockProvider()
+    if name == "encoder":
+        return _encoder()
     raise ValueError(
         f"Bilinmeyen LLM sağlayıcısı: {name!r}. LLM mimarisi netleşene kadar 'mock' kullanın."
     )
+
+
+@lru_cache
+def _encoder():
+    from .encoder import EncoderProvider  # numpy/model yalnızca gerekince yüklenir
+
+    return EncoderProvider()

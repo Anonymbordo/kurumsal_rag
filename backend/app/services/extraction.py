@@ -1,10 +1,41 @@
-"""Doküman → görev önerileri."""
-from sqlalchemy import delete
+"""Doküman → görev önerileri.
+
+Akış:
+  1. LLM/encoder sağlayıcısı görevleri çıkarır (her biri kaynağına bağlı).
+  2. Görev ve ekibin geçmiş işleri aynı embedding uzayına taşınır.
+  3. Kişi önerisi: uzmanlık + geçmiş iş + anlamsal benzerlik + yük.
+  4. HDBSCAN ile iş alanlarına kümelenir; hiçbir alana girmeyen görev "aykırı"
+     sayılır ve güveni bir kademe düşürülür (lider daha dikkatli baksın diye).
+"""
+import numpy as np
+from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
+from ..config import get_settings
 from ..llm import get_provider
+from ..ml.clustering import cluster
+from ..ml.embedder import Embedder, HashingEmbedder
 from ..models import Document, Task
-from .assignment import suggest
+from .assignment import SemanticMap, suggest
+
+OUTLIER_REASON = "Ekipte benzeri yapılmamış, alışılmadık bir görev"
+
+
+def _embedder_for(provider) -> tuple[Embedder, bool]:
+    """Encoder sağlayıcısının modeli varsa onu kullan; yoksa hafif yedek (anlamsal sinyal zayıf)."""
+    emb = getattr(provider, "embedder", None)
+    return (emb, True) if emb is not None else (HashingEmbedder(), False)
+
+
+def _semantic_map(task_vec: np.ndarray, history: list[Task], hist_vecs: np.ndarray) -> SemanticMap:
+    out: SemanticMap = {}
+    if not history:
+        return out
+    sims = hist_vecs @ task_vec
+    for t, s in zip(history, sims):
+        if t.assignee_id and (t.assignee_id not in out or s > out[t.assignee_id][0]):
+            out[t.assignee_id] = (float(s), f"{t.key} {t.title}" if t.key else t.title)
+    return out
 
 
 def extract_for_document(db: Session, doc: Document) -> list[Task]:
@@ -14,13 +45,47 @@ def extract_for_document(db: Session, doc: Document) -> list[Task]:
     # Aynı doküman yeniden işlenirse karara bağlanmamış eski öneriler silinir.
     db.execute(delete(Task).where(Task.document_id == doc.id, Task.status == "suggested"))
 
+    embedder, semantic_ok = _embedder_for(provider)
+    history = [
+        t
+        for t in db.scalars(
+            select(Task).where(Task.team_id == doc.team_id, Task.status.in_(("done", "exported", "accepted")))
+        )
+        if t.document_id != doc.id
+    ]
+    hist_texts = [t.title for t in history]
+    new_texts = [ex.source_quote or ex.title for ex in extracted]
+    hist_vecs = embedder.encode(hist_texts) if hist_texts else np.zeros((0, 1))
+    new_vecs = embedder.encode(new_texts) if new_texts else np.zeros((0, 1))
+
+    # İş alanı kümeleri: geçmiş + yeni görevler birlikte. Yalnızca gerçek anlamsal
+    # embedding varken (encoder sağlayıcısı) yapılır; kural tabanlı modda yanıltıcı olur.
+    all_texts = hist_texts + new_texts
+    clusters = None if not semantic_ok else cluster(
+        all_texts,
+        np.vstack([hist_vecs, new_vecs]) if len(hist_texts) and len(new_texts) else new_vecs,
+        get_settings().cluster_min_size,
+    ) if new_texts else None
+
     tasks: list[Task] = []
-    for i, ex in enumerate(extracted, start=1):
-        s = suggest(db, doc.team_id, ex.tags)
+    for i, ex in enumerate(extracted):
+        semantic = _semantic_map(new_vecs[i], history, hist_vecs) if semantic_ok else None
+        s = suggest(db, doc.team_id, ex.tags, semantic)
+        confidence, reasons = s.confidence, list(s.reasons)
+
+        workstream, outlier = None, False
+        if clusters is not None and len(clusters.labels) == len(all_texts) and clusters.names:
+            lab = int(clusters.labels[len(hist_texts) + i])
+            outlier = lab < 0
+            workstream = clusters.names.get(lab)
+            if outlier:
+                confidence = max(1, confidence - 1)
+                reasons.append(OUTLIER_REASON)
+
         t = Task(
             document_id=doc.id,
             team_id=doc.team_id,
-            order_no=i,
+            order_no=i + 1,
             title=ex.title,
             detail=ex.detail,
             tags=ex.tags,
@@ -29,10 +94,13 @@ def extract_for_document(db: Session, doc: Document) -> list[Task]:
             source_quote=ex.source_quote,
             source_start=ex.source_start,
             source_end=ex.source_end,
+            detect_score=ex.detect_score,
+            workstream=workstream,
+            is_outlier=outlier,
             suggested_assignee_id=s.assignee_id,
             alt_assignee_id=s.alt_assignee_id,
-            confidence=s.confidence,
-            reasons=s.reasons,
+            confidence=confidence,
+            reasons=reasons,
             status="suggested",
         )
         db.add(t)
