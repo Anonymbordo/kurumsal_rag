@@ -1,6 +1,7 @@
 export interface Org {
   name: string
   accent: string
+  primary: string
   logo_url: string | null
   model_label: string
   llm_provider: string

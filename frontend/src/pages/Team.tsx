@@ -3,7 +3,11 @@ import { Link } from 'react-router-dom'
 import { api } from '../api'
 import type { AccuracyRow, TeamLoad } from '../types'
 
-const ACC_COLORS: Record<number, string> = { 3: '#1F4FD1', 2: '#5B7FDF', 1: '#C2410C' }
+const ACC_COLORS: Record<number, string> = {
+  3: 'var(--primary)',
+  2: 'color-mix(in srgb, var(--primary) 55%, #fff)',
+  1: '#C2410C',
+}
 
 export default function Team() {
   const [load, setLoad] = useState<TeamLoad | null>(null)
@@ -37,8 +41,8 @@ export default function Team() {
                     <div style={{ fontSize: 13, color: 'var(--muted)' }}>{m.role} · {m.new_tasks} yeni görev</div>
                   </div>
                   <div className="loadbar" role="img" aria-label={`${m.name}: sprint başı yüzde ${m.before}, şimdi yüzde ${m.after}`}>
-                    <i style={{ width: `${Math.min(m.after, 100)}%`, background: hot ? '#C2410C' : '#1F4FD1' }} />
-                    <i style={{ width: `${Math.min(m.before, 100)}%`, background: hot ? '#F2B48A' : '#A9BCEB' }} />
+                    <i style={{ width: `${Math.min(m.after, 100)}%`, background: hot ? '#C2410C' : 'var(--primary)' }} />
+                    <i style={{ width: `${Math.min(m.before, 100)}%`, background: hot ? '#F2B48A' : 'color-mix(in srgb, var(--primary) 30%, #fff)' }} />
                     <i className="limit" style={{ left: `${load.limit}%` }} />
                   </div>
                   <div style={{ fontSize: 15, fontWeight: 700, textAlign: 'right', color: hot ? '#9A3412' : 'var(--ink)' }}>%{m.after}</div>

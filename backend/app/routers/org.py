@@ -17,6 +17,7 @@ def org():
     return {
         "name": s.org_name,
         "accent": s.org_accent,
+        "primary": s.org_primary or s.org_accent,
         "logo_url": s.org_logo_url or None,
         "model_label": s.llm_model_label,
         "llm_provider": s.llm_provider,

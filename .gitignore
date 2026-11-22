@@ -13,3 +13,7 @@ frontend/dist/
 # Ortam
 .env
 .DS_Store
+
+# Kurum marka dosyaları (logo vb.) repoya girmez
+frontend/public/brand/*
+!frontend/public/brand/.gitkeep

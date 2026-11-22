@@ -20,7 +20,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     api.org().then((o) => {
       setOrg(o)
-      document.documentElement.style.setProperty('--accent', o.accent)
+      const root = document.documentElement.style
+      root.setProperty('--accent', o.accent)
+      root.setProperty('--primary', o.primary || o.accent)
+      document.title = o.name && o.name !== 'Kurum Adı' ? `Görev Asistanı · ${o.name}` : 'Görevlendirme Asistanı'
     })
   }, [])
 

@@ -5,14 +5,16 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_file=".env", env_prefix="GA_", extra="ignore")
+    # .env hem proje kökünde hem backend/ içinde aranır; backend/.env kökteki değerleri ezer.
+    model_config = SettingsConfigDict(env_file=("../.env", ".env"), env_prefix="GA_", extra="ignore")
 
     # Veritabanı: geliştirmede SQLite, kurulumda PostgreSQL URL'si verilebilir.
     database_url: str = "sqlite:///./gorev_asistani.db"
 
     # Kurum kimliği (beyaz etiket): arayüz bu değerleri /api/org üzerinden okur.
     org_name: str = "Kurum Adı"
-    org_accent: str = "#1F4FD1"
+    org_primary: str = ""  # butonlar; boşsa vurgu rengi kullanılır
+    org_accent: str = "#1F4FD1"  # küçük vurgu detayları
     org_logo_url: str = ""  # boşsa arayüz logo yer tutucusunu gösterir
 
     # LLM katmanı. Mimari netleşene kadar "mock" sağlayıcı kullanılıyor.

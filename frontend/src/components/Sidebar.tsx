@@ -38,7 +38,9 @@ export function Sidebar() {
     <aside className="sidebar" aria-label="Kenar menü">
       <div className="brand">
         <Logo size="sm" />
-        <span>Görev Asistanı</span>
+        <span>
+          Görev Asistanı<span className="brand-dot" aria-hidden="true" />
+        </span>
       </div>
 
       <Link to="/" className="btn primary block">
@@ -79,7 +81,7 @@ export function Sidebar() {
             <span className="grow">
               {t.key} · {t.title}
             </span>
-            <span className="meta" style={{ color: t.status === 'done' ? 'var(--ok)' : 'var(--accent)' }}>
+            <span className="meta" style={{ color: t.status === 'done' ? 'var(--ok)' : 'var(--primary)' }}>
               {t.status === 'done' ? 'Bitti' : 'Sürüyor'}
             </span>
           </button>
