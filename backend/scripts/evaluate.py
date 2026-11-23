@@ -44,20 +44,38 @@ def _load_gold():
         if name.startswith("_"):
             continue
         hard.append((name, (ROOT / "samples" / "eval" / name).read_text(encoding="utf-8"), positives))
-    SETS["zor (gerçekçi yazım)"] = hard
+    SETS["zor (gerçekçi yazım) · doğrulama"] = hard
+
+    from app.services.documents import extract_text
+
+    test = []
+    tdir = ROOT / "samples" / "test"
+    if (tdir / "gold.json").exists():
+        tgold = json.loads((tdir / "gold.json").read_text(encoding="utf-8"))
+        for name, spec in tgold.items():
+            if name.startswith("_"):
+                continue
+            text = extract_text(name, (tdir / name).read_bytes())
+            test.append((name, text, spec))
+    if test:
+        SETS["TEST (bağımsız, dokunulmaz)"] = test
 
 
 def evaluate(provider, docs, verbose=False):
     from app.llm.text import split_sentences
 
     tp = fp = fn = 0
-    for name, text, positives in docs:
+    for name, text, spec in docs:
+        positives = spec["tasks"] if isinstance(spec, dict) else spec
+        ambiguous = spec.get("ambiguous", []) if isinstance(spec, dict) else []
         found = {t.source_quote for t in provider.extract_tasks(text, "meeting")}
         sents = split_sentences(text)
         missing = [p for p in positives if not any(p in s.text for s in sents)]
         if missing:
             print(f"   UYARI {name}: altın etiket cümlelerde bulunamadı: {missing}")
         for s in sents:
+            if any(a in s.text for a in ambiguous):
+                continue  # belirsiz cümleler puanlanmaz
             gold = any(p in s.text for p in positives)
             pred = s.text in found
             tp += gold and pred
@@ -91,7 +109,7 @@ def main():
         provs.append((label, prov, time.perf_counter() - t0))
 
     for set_name, docs in SETS.items():
-        n = sum(len(d[2]) for d in docs)
+        n = sum(len(d[2]["tasks"] if isinstance(d[2], dict) else d[2]) for d in docs)
         print(f"\n== {set_name}: {len(docs)} doküman, {n} görev")
         print(f"{'sağlayıcı':<44} kesinlik  duyarlılık  F1")
         for label, prov, load in provs:

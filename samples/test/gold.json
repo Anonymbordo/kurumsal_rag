@@ -1,0 +1,21 @@
+{
+  "_aciklama": "BAĞIMSIZ TEST SETİ. Dokümanları başka bir model (Gemini) yazdı; etiketler model çıktısı görülmeden verildi. Bu sete bakarak eşik/prototip AYARLANMAZ. 'belirsiz' cümleler puanlamaya katılmaz.",
+  "sprint_planlama_gemini.pdf": {
+    "tasks": [
+      "darboğazı bulabilir mi",
+      "tetikleniyormuş",
+      "retention ayarlarını",
+      "push payload imzalama",
+      "smoke test paketini",
+      "Selin bir ara bakabilir mi",
+      "cihaz bazlı kısıt eklenmeli",
+      "SSL pinning",
+      "dekont servisine entegre edilecek"
+    ],
+    "ambiguous": [
+      "DEBUG kalmış olabilir mi",
+      "zorunlu hale getirilecek",
+      "davetleri Burak gönderecek"
+    ]
+  }
+}

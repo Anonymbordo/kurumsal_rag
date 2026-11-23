@@ -1,6 +1,7 @@
 """Yüklenen dosyalardan düz metin çıkarma (tamamen yerel)."""
 import io
 import re
+import unicodedata
 
 from docx import Document as DocxDocument
 from pypdf import PdfReader
@@ -18,7 +19,10 @@ def extract_text(filename: str, data: bytes) -> str:
         return data.decode("utf-8", errors="replace")
     if name.endswith(".pdf"):
         reader = PdfReader(io.BytesIO(data))
-        return reflow("\n".join((page.extract_text() or "") for page in reader.pages))
+        raw = "\n".join((page.extract_text() or "") for page in reader.pages)
+        raw = unicodedata.normalize("NFKC", raw)  # "ﬂ" gibi bitişik harfleri ayır
+        raw = re.sub(r"(?im)^.*\b(page|sayfa)\s+\d+\s*(of|/)\s*\d+\s*$", "", raw)  # sayfa altlığı
+        return reflow(raw)
     if name.endswith(".docx"):
         doc = DocxDocument(io.BytesIO(data))
         return "\n".join(p.text for p in doc.paragraphs)
