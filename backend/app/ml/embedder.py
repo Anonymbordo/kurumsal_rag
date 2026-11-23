@@ -39,6 +39,9 @@ class SentenceTransformerEmbedder:
 
         self.name = model_name
         self._model = SentenceTransformer(model_name, device=device)
+        # Bazı modeller float16 ağırlıkla geliyor; CPU'da float16 çok yavaş, float32'ye çevir.
+        if device == "cpu":
+            self._model = self._model.float()
         # E5 ailesi girdilerde ön ek bekler; simetrik benzerlik için "query: " önerilir.
         self._prefix = "query: " if "e5" in model_name.lower() else ""
 
