@@ -75,15 +75,23 @@ class EncoderProvider:
 
     def _probe_scores(self, sentences: list[str]) -> np.ndarray:
         clf = self.probe["classifier"]
-        m = np.hstack([self.embedder.encode(sentences), feature_matrix(sentences)])
-        p = clf.predict_proba(m)[:, 1]
-        if self.probe.get("use_clauses"):
-            for i, s in enumerate(sentences):
-                parts = clauses(s)
-                if len(parts) > 1:
-                    pm = np.hstack([self.embedder.encode(parts), feature_matrix(parts)])
-                    p[i] = max(p[i], clf.predict_proba(pm)[:, 1].max())
-        return p
+        if not self.probe.get("use_clauses"):
+            m = np.hstack([self.embedder.encode(sentences), feature_matrix(sentences)])
+            return clf.predict_proba(m)[:, 1]
+        # Cümleler ve yan cümleleri TEK seferde kodla (her cümle için ayrı çağrı çok yavaş)
+        items: list[str] = []
+        owner: list[int] = []
+        for i, s in enumerate(sentences):
+            parts = clauses(s)
+            for t in [s] + (parts if len(parts) > 1 else []):
+                items.append(t)
+                owner.append(i)
+        m = np.hstack([self.embedder.encode(items), feature_matrix(items)])
+        probs = clf.predict_proba(m)[:, 1]
+        out = np.zeros(len(sentences))
+        for i, pr in zip(owner, probs):
+            out[i] = max(out[i], pr)
+        return out
 
     def task_scores(self, sentences: list[str]) -> np.ndarray:
         if not sentences:

@@ -148,14 +148,18 @@ def fit(Xm, y, C):
 def sentence_scores(clf, embedder, sentences: list[str], use_clauses: bool) -> np.ndarray:
     from app.ml.features import clauses
 
-    p = clf.predict_proba(build_matrix(embedder, sentences))[:, 1]
     if not use_clauses:
-        return p
-    out = p.copy()
+        return clf.predict_proba(build_matrix(embedder, sentences))[:, 1]
+    items, owner = [], []
     for i, s in enumerate(sentences):
         parts = clauses(s)
-        if len(parts) > 1:
-            out[i] = max(out[i], clf.predict_proba(build_matrix(embedder, parts))[:, 1].max())
+        for t in [s] + (parts if len(parts) > 1 else []):
+            items.append(t)
+            owner.append(i)
+    probs = clf.predict_proba(build_matrix(embedder, items))[:, 1]
+    out = np.zeros(len(sentences))
+    for i, pr in zip(owner, probs):
+        out[i] = max(out[i], pr)
     return out
 
 
