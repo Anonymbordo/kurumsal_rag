@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Link, NavLink, useNavigate } from 'react-router-dom'
 import { api } from '../api'
 import { useApp } from '../context'
-import { IconCheckBox, IconLock, IconPlus, IconSearch, IconUsers } from '../icons'
+import { IconCheckBox, IconFile, IconLock, IconPlus, IconSearch, IconUsers } from '../icons'
 import type { Conversation, Group, Task, User } from '../types'
 import { Logo } from './Logo'
 
@@ -99,6 +99,14 @@ export function Sidebar() {
             <span className="meta">{g.member_count}</span>
           </div>
         ))}
+        {me?.is_lead && (
+          <NavLink to="/dokumanlar" className={({ isActive }) => `navitem${isActive ? ' active' : ''}`}>
+            <span className="chip-sq" style={{ background: '#eef1f5' }} aria-hidden="true">
+              <IconFile size={14} />
+            </span>
+            <span className="grow">Dokümanlar</span>
+          </NavLink>
+        )}
         {me?.is_lead && (
           <NavLink to="/ekip" className={({ isActive }) => `navitem${isActive ? ' active' : ''}`}>
             <span className="chip-sq" style={{ background: '#eef1f5' }} aria-hidden="true">

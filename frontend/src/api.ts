@@ -2,6 +2,7 @@ import type {
   AccuracyRow,
   ChatMessage,
   Conversation,
+  DocListItem,
   DocPerson,
   DocumentInfo,
   Group,
@@ -76,6 +77,9 @@ export const api = {
   send: (id: number, text: string) => post<{ messages: ChatMessage[] }>(`/api/conversations/${id}/messages`, { text }),
 
   uploadDocument: (form: FormData) => post<DocumentInfo>('/api/documents', form),
+  documents: () => request<DocListItem[]>('/api/documents'),
+  deleteDocument: (id: number) =>
+    request<{ deleted: number; kept_tasks: number; removed_tasks: number }>(`/api/documents/${id}`, { method: 'DELETE' }),
   document: (id: number) => request<DocumentInfo>(`/api/documents/${id}`),
   extract: (id: number) => post<Task[]>(`/api/documents/${id}/extract`),
   documentTasks: (id: number) => request<Task[]>(`/api/documents/${id}/tasks`),

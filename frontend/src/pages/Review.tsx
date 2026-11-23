@@ -197,6 +197,7 @@ export default function Review() {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [people, setPeople] = useState<DocPerson[]>([])
+  const [confirmDelete, setConfirmDelete] = useState(false)
   const [skipPeople, setSkipPeople] = useState<Set<string>>(new Set())
   const canDecide = !!me?.is_lead
 
@@ -251,6 +252,13 @@ export default function Review() {
       setTasks((ts) => ts.map((x) => (x.id === updated.id ? updated : x)))
     })
 
+  const deleteDoc = () =>
+    run(async () => {
+      await api.deleteDocument(docId)
+      refreshSidebar()
+      navigate('/dokumanlar')
+    })
+
   const exportAccepted = () =>
     run(async () => {
       await api.exportDocument(docId)
@@ -282,6 +290,20 @@ export default function Review() {
             <h1 id="doc-title">{doc.title}</h1>
             <p style={{ margin: '0 0 20px', fontSize: 13, color: 'var(--muted)' }}>
               Yükleyen: {doc.uploaded_by?.name} · {new Date(doc.created_at).toLocaleDateString('tr-TR', { day: 'numeric', month: 'long', year: 'numeric' })}
+              {canDecide && (
+                <>
+                  {' · '}
+                  {confirmDelete ? (
+                    <>
+                      Silinsin mi?{' '}
+                      <button type="button" className="linkbtn" onClick={() => setConfirmDelete(false)}>Vazgeç</button>{' '}
+                      <button type="button" className="linkbtn" onClick={deleteDoc}>Evet, sil</button>
+                    </>
+                  ) : (
+                    <button type="button" className="linkbtn" onClick={() => setConfirmDelete(true)}>Dokümanı sil</button>
+                  )}
+                </>
+              )}
             </p>
             <DocText text={doc.text ?? ''} tasks={tasks.filter((t) => t.status !== 'dismissed')} focus={focus} />
           </section>

@@ -147,3 +147,7 @@ export interface SkillOption {
   id: string
   label: string
 }
+
+export interface DocListItem extends DocumentInfo {
+  counts: { pending: number; accepted: number; active: number }
+}

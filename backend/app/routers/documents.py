@@ -68,6 +68,52 @@ async def upload(
     return S.document(doc)
 
 
+@router.get("")
+def list_documents(user: User = Depends(require_lead), db: Session = Depends(get_db)):
+    """Ekibin dokümanları, en yeniden eskiye; görev durumlarının özetiyle."""
+    docs = db.scalars(select(Document).where(Document.team_id == user.team_id).order_by(Document.created_at.desc()))
+    out = []
+    for d in docs:
+        st = [t.status for t in db.scalars(select(Task).where(Task.document_id == d.id))]
+        out.append(
+            {
+                **S.document(d),
+                "counts": {
+                    "pending": sum(s in ("suggested", "candidate", "announcement") for s in st),
+                    "accepted": st.count("accepted"),
+                    "active": sum(s in ("exported", "done") for s in st),
+                },
+            }
+        )
+    return out
+
+
+@router.delete("/{doc_id}")
+def delete_document(doc_id: int, user: User = Depends(require_lead), db: Session = Depends(get_db)):
+    """Dokümanı siler.
+
+    Aktarılmış ya da tamamlanmış görevler silinmez: kişilerin iş listesinde kalırlar,
+    yalnızca dokümanla bağları kopar (kaynak alıntısı görevin içinde saklı).
+    Karara bağlanmamış öneriler, adaylar ve reddedilenler dokümanla birlikte silinir.
+    """
+    doc = _get_doc(db, doc_id, user)
+    if doc.team_id != user.team_id:
+        raise HTTPException(403, "Yalnızca kendi ekibinizin dokümanlarını silebilirsiniz")
+    kept = removed = 0
+    for t in db.scalars(select(Task).where(Task.document_id == doc.id)).all():
+        if t.status in ("exported", "done"):
+            t.document_id = None
+            kept += 1
+        else:
+            db.delete(t)
+            removed += 1
+    title = doc.title
+    db.delete(doc)
+    audit.log(db, user.id, "document.delete", f"document:{doc_id}", title=title, kept=kept, removed=removed)
+    db.commit()
+    return {"deleted": doc_id, "kept_tasks": kept, "removed_tasks": removed}
+
+
 @router.get("/shared")
 def shared_with_me(user: User = Depends(current_user), db: Session = Depends(get_db)):
     docs = [d for d in db.scalars(select(Document).order_by(Document.created_at.desc())) if user.id in (d.shared_with or [])]

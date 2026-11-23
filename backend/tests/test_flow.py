@@ -155,3 +155,20 @@ def test_team_member_crud(client):
     assert u2["skills"] == ["qa"]
     assert client.delete(f"/api/team/members/{u['id']}", headers=LEAD).status_code == 200
     assert client.delete("/api/team/members/ayse", headers=LEAD).status_code == 409
+
+
+def test_list_and_delete_document(client):
+    doc = client.post("/api/documents", data={"text": "Ayşe rapor servisini güncellemeli.", "title": "Silinecek"}, headers=LEAD).json()
+    client.post(f"/api/documents/{doc['id']}/extract", headers=LEAD)
+    docs = client.get("/api/documents", headers=LEAD).json()
+    row = next(d for d in docs if d["id"] == doc["id"])
+    assert row["counts"]["pending"] >= 1
+    assert client.delete(f"/api/documents/{doc['id']}", headers=AYSE).status_code == 403
+    r = client.delete(f"/api/documents/{doc['id']}", headers=LEAD).json()
+    assert r["removed_tasks"] >= 1 and r["kept_tasks"] == 0
+    assert client.get(f"/api/documents/{doc['id']}", headers=LEAD).status_code == 404
+    # aktarılmış görevleri olan doküman silinince görevler kişide kalır
+    mine_before = client.get("/api/tasks/mine", headers=AYSE).json()
+    first = client.get("/api/documents", headers=LEAD).json()[-1]
+    client.delete(f"/api/documents/{first['id']}", headers=LEAD)
+    assert len(client.get("/api/tasks/mine", headers=AYSE).json()) == len(mine_before)
