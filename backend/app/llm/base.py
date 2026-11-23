@@ -22,6 +22,7 @@ class ExtractedTask:
     source_start: int = -1  # alıntının dokümandaki karakter konumu
     source_end: int = -1
     detect_score: float | None = None  # modelin "bu bir görev" olasılığı (0–1); kural tabanlıda yok
+    candidate: bool = False  # eşiğin biraz altında: görev olabilir, lidere sorulacak (aktif öğrenme)
 
 
 @dataclass

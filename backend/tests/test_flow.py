@@ -88,3 +88,23 @@ def test_reextract_does_not_duplicate_decided(client):
     spans = [(t["source"]["start"], t["source"]["end"]) for t in after]
     assert len(spans) == len(set(spans))  # aynı cümle iki kez yok
     assert len([t for t in after if t["status"] != "suggested"]) == len(decided)
+
+
+def test_reject_reason_and_candidates(client):
+    tasks = client.get("/api/documents/1/tasks", headers=LEAD).json()
+    open_ = [t for t in tasks if t["status"] == "suggested"]
+    r = client.post(f"/api/tasks/{open_[0]['id']}/decision", json={"action": "reject", "reason": "not_now"}, headers=LEAD).json()
+    assert r["status"] == "rejected" and r["reject_reason"] == "not_now"
+
+
+def test_labeling_preview_is_blind_for_test(client, tmp_path, monkeypatch):
+    from app.config import get_settings
+
+    monkeypatch.setattr(get_settings(), "samples_dir", str(tmp_path))
+    data = {"text": "Ali bu hafta raporu hazırlamalı. Toplantı iyi geçti.", "split": "test", "names": "Ali"}
+    r = client.post("/api/labeling/preview", data=data, headers=LEAD).json()
+    assert r["suggestions"] is None  # test için kör
+    assert "Ali" not in r["text"]  # anonimleştirildi
+    body = {"title": "deneme", "split": "test", "text": r["text"], "sentences": r["sentences"], "labels": ["task", "not_task"]}
+    saved = client.post("/api/labeling/save", json=body, headers=LEAD).json()
+    assert saved["tasks"] == 1 and (tmp_path / "test" / "gold.json").exists()

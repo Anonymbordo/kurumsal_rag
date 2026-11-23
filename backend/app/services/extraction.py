@@ -42,9 +42,9 @@ def extract_for_document(db: Session, doc: Document) -> list[Task]:
     provider = get_provider()
     extracted = provider.extract_tasks(doc.text, doc.doc_type)
 
-    # Aynı doküman yeniden işlenirse: karara bağlanmamış eski öneriler silinir,
-    # karar verilmiş (onaylanan/reddedilen/aktarılan) cümleler tekrar önerilmez.
-    db.execute(delete(Task).where(Task.document_id == doc.id, Task.status == "suggested"))
+    # Aynı doküman yeniden işlenirse: karara bağlanmamış eski öneriler ve adaylar silinir,
+    # karar verilmiş (onaylanan/reddedilen/aktarılan/elenen) cümleler tekrar önerilmez.
+    db.execute(delete(Task).where(Task.document_id == doc.id, Task.status.in_(("suggested", "candidate"))))
     decided = db.scalars(select(Task).where(Task.document_id == doc.id)).all()
     taken = {(t.source_start, t.source_end) for t in decided}
     extracted = [ex for ex in extracted if (ex.source_start, ex.source_end) not in taken]
@@ -76,6 +76,17 @@ def extract_for_document(db: Session, doc: Document) -> list[Task]:
     tasks: list[Task] = []
     pending: dict[str, float] = {}  # bu dokümanda şimdiye kadar önerilen iş günleri (yük dengeleme)
     for i, ex in enumerate(extracted):
+        if ex.candidate:
+            # Aktif öğrenme adayı: kişi önerisi lider "görev" derse hesaplanır.
+            t = Task(
+                document_id=doc.id, team_id=doc.team_id, order_no=next_no + i + 1, title=ex.title,
+                detail=ex.detail, tags=ex.tags, est_days=ex.est_days, source_ref=ex.source_ref,
+                source_quote=ex.source_quote, source_start=ex.source_start, source_end=ex.source_end,
+                detect_score=ex.detect_score, status="candidate", confidence=1, reasons=[],
+            )
+            db.add(t)
+            tasks.append(t)
+            continue
         semantic = _semantic_map(new_vecs[i], history, hist_vecs) if semantic_ok else None
         s = suggest(db, doc.team_id, ex.tags, semantic, text=ex.source_quote, pending_days=pending)
         if s.assignee_id:
@@ -117,3 +128,11 @@ def extract_for_document(db: Session, doc: Document) -> list[Task]:
         tasks.append(t)
     db.flush()
     return tasks
+
+
+def promote_candidate(db: Session, t: Task) -> None:
+    """Lider aday cümleye "görev" dedi: kişi önerisini şimdi hesapla."""
+    s = suggest(db, t.team_id, t.tags, text=t.source_quote)
+    t.status = "suggested"
+    t.suggested_assignee_id, t.alt_assignee_id = s.assignee_id, s.alt_assignee_id
+    t.confidence, t.reasons = s.confidence, s.reasons + ["Model emin değildi; lider görev olarak işaretledi"]

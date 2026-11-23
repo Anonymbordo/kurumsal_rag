@@ -21,6 +21,10 @@ class Settings(BaseSettings):
     llm_provider: str = "mock"  # mock | encoder
     # encoder sağlayıcısının embedding modeli (Hugging Face adı) ya da "hashing" (indirme yok)
     embed_model: str = "intfloat/multilingual-e5-small"
+    # Etiketleme aracının yazdığı veri klasörü (samples/train, samples/test)
+    samples_dir: str = "../samples"
+    # Aktif öğrenme: eşiğin bu kadar altına kadar olan cümleler "emin olamadı" panelinde gösterilir
+    candidate_margin: float = 0.25
     # Eğitilmiş görev sınıflandırıcısı (scripts/train_probe.py üretir). Yoksa prototip yöntemi kullanılır.
     probe_path: str = "models/task_probe.joblib"
     # Kümeleme: bir iş alanı en az kaç görevden oluşsun

@@ -8,6 +8,8 @@ STATUS_LABELS = {
     "suggested": "Karar bekliyor",
     "accepted": "Onaylandı",
     "rejected": "Reddedildi",
+    "candidate": "Model emin değil",
+    "dismissed": "Görev değil",
     "exported": "Devam ediyor",
     "done": "Tamamlandı",
 }
@@ -60,6 +62,7 @@ def task(db: Session, t: Task, users: dict[str, User]) -> dict:
         "status": t.status,
         "status_label": STATUS_LABELS.get(t.status, t.status),
         "lead_picked_first": t.lead_picked_first,
+        "reject_reason": t.reject_reason,
     }
 
 

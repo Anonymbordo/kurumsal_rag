@@ -72,6 +72,17 @@ python scripts/evaluate.py --verbose      # mock ile encoder'ı karşılaştır
 
 Model seçimi: `GA_EMBED_MODEL` ile değişir. `gte-small` gibi modeller ağırlıklı İngilizce eğitildiği için Türkçede çok dilli modellerle (ör. `intfloat/multilingual-e5-small`, `-base`) karşılaştırılmalı; `scripts/evaluate.py` bunun için. Değerlendirme seti şu an küçük ve örnek dokümanlardan oluşuyor; gerçek dokümanlar ve etiketler eklendikçe anlamlılaşır.
 
+## Modeli iyileştirme
+
+Veri toplama, etiketleme ve aktif öğrenme döngüsü: [`docs/VERI_TOPLAMA.md`](docs/VERI_TOPLAMA.md)
+
+- **Veri etiketleme ekranı** (`/etiketle`, lider): doküman yükle → KVKK anonimleştirme → her cümleyi
+  görev / değil / belirsiz işaretle → eğitim ya da (kör) test verisine kaydet.
+- **"Model emin olamadı" paneli:** eşiğin biraz altındaki cümleler lidere sorulur.
+- **Ret nedeni:** "görev değil" eğitim etiketi olur; "görev ama şimdi değil" olmaz.
+- `scripts/train_probe.py` dosyadaki etiketleri ve uygulamadaki kararları birlikte kullanır;
+  test dokümanlarına ait her şeyi otomatik dışarıda bırakır.
+
 ## Mimari
 
 ```

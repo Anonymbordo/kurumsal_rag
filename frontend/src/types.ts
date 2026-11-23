@@ -46,7 +46,8 @@ export interface Task {
   detect_score: number | null
   workstream: string | null
   is_outlier: boolean
-  status: 'suggested' | 'accepted' | 'rejected' | 'exported' | 'done'
+  status: 'suggested' | 'accepted' | 'rejected' | 'exported' | 'done' | 'candidate' | 'dismissed'
+  reject_reason: 'not_task' | 'not_now' | null
   status_label: string
   lead_picked_first: boolean
 }
@@ -121,4 +122,12 @@ export interface AccuracyRow {
   label: string
   total: number
   unchanged_pct: number | null
+}
+
+export interface LabelPreview {
+  title: string
+  text: string
+  sentences: string[]
+  suggestions: number[] | null
+  anonymized: Record<string, number>
 }

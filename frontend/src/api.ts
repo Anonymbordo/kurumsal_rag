@@ -4,6 +4,7 @@ import type {
   Conversation,
   DocumentInfo,
   Group,
+  LabelPreview,
   Org,
   Task,
   TeamLoad,
@@ -77,8 +78,17 @@ export const api = {
   extract: (id: number) => post<Task[]>(`/api/documents/${id}/extract`),
   documentTasks: (id: number) => request<Task[]>(`/api/documents/${id}/tasks`),
   exportDocument: (id: number) => post<{ exported: { id: number; key: string }[] }>(`/api/documents/${id}/export`),
-  decide: (taskId: number, action: 'pick' | 'accept' | 'reject' | 'undo', assignee_id?: string) =>
-    post<Task>(`/api/tasks/${taskId}/decision`, { action, assignee_id }),
+  decide: (
+    taskId: number,
+    action: 'pick' | 'accept' | 'reject' | 'undo' | 'promote' | 'dismiss',
+    assignee_id?: string,
+    reason?: 'not_task' | 'not_now',
+  ) => post<Task>(`/api/tasks/${taskId}/decision`, { action, assignee_id, reason }),
+
+  labelPreview: (form: FormData) => post<LabelPreview>('/api/labeling/preview', form),
+  labelSave: (body: { title: string; split: 'train' | 'test'; text: string; sentences: string[]; labels: string[] }) =>
+    post<{ saved: string; tasks: number; sentences: number }>('/api/labeling/save', body),
+  labelStats: () => request<{ train_sentences: number; test_documents: number }>('/api/labeling/stats'),
 
   teamMembers: () => request<User[]>('/api/team/members'),
   teamLoad: () => request<TeamLoad>('/api/team/load'),

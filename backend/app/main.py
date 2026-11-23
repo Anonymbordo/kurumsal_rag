@@ -8,7 +8,7 @@ from fastapi.staticfiles import StaticFiles
 
 from .config import get_settings
 from .db import Base, SessionLocal, add_missing_columns, engine
-from .routers import chat, documents, org, tasks, team
+from .routers import chat, documents, labeling, org, tasks, team
 from .seed import seed
 
 settings = get_settings()
@@ -33,7 +33,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-for r in (org.router, documents.router, tasks.router, team.router, chat.router):
+for r in (org.router, documents.router, tasks.router, team.router, chat.router, labeling.router):
     app.include_router(r)
 
 

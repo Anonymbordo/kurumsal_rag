@@ -5,7 +5,8 @@ Encoder (embedding modeli) DONMUŞ kalır; üstüne yalnızca bir lojistik regre
     çıktı  = p(görev)
 
 Veri:
-  - samples/train/sentences.tsv          elle etiketli cümleler          (her zaman eğitimde)
+  - samples/train/*.tsv                  elle / Gemini / etiketleme aracı (her zaman eğitimde)
+  - gorev_asistani.db                    liderin onay/ret kararları      (aktif öğrenme döngüsü)
   - app/ml/prototypes.py                 örnek ve zor negatif çiftler    (her zaman eğitimde)
   - samples/eval/*  + örnek notlar       doğrulama dokümanları           (çapraz doğrulamada dönüşümlü)
   - samples/test/*                       TEST — eğitime ve seçime HİÇ girmez
@@ -31,21 +32,82 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 ROOT = Path(__file__).resolve().parents[2]
 
 
-def load_base() -> tuple[list[str], list[int]]:
+def _test_texts() -> list[str]:
+    """Test dokümanlarının metinleri: bunlarla örtüşen hiçbir cümle eğitime girmez."""
+    from app.services.documents import extract_text
+
+    out = []
+    tdir = ROOT / "samples" / "test"
+    if (tdir / "gold.json").exists():
+        for name in json.loads((tdir / "gold.json").read_text(encoding="utf-8")):
+            if not name.startswith("_") and (tdir / name).exists():
+                out.append(extract_text(name, (tdir / name).read_bytes()))
+    return out
+
+
+def load_db_labels(db_path: Path, test_texts: list[str]) -> tuple[list[str], list[int]]:
+    """Uygulamadaki lider kararları -> etiket (aktif öğrenme döngüsü).
+
+    1: onaylanan / aktarılan / tamamlanan görevler ve "görev" denen adaylar
+    0: "görev değil" nedeniyle reddedilenler ve elenen adaylar
+    "görev ama şimdi değil" reddi ve nedeni bilinmeyen eski retler etiket sayılmaz.
+    """
+    import sqlite3
+
+    if not db_path.exists():
+        return [], []
+    con = sqlite3.connect(db_path)
+    cols = {r[1] for r in con.execute("PRAGMA table_info(tasks)")}
+    reason = "reject_reason" if "reject_reason" in cols else "NULL"
+    rows = con.execute(
+        f"SELECT source_quote, status, {reason} FROM tasks WHERE document_id IS NOT NULL AND source_quote != ''"
+    ).fetchall()
+    X, y, leaked = [], [], 0
+    for quote, status, why in rows:
+        if any(quote in t for t in test_texts):
+            leaked += 1
+            continue
+        if status in ("accepted", "exported", "done"):
+            X.append(quote); y.append(1)
+        elif status == "dismissed" or (status == "rejected" and why == "not_task"):
+            X.append(quote); y.append(0)
+    if leaked:
+        print(f"  (veritabanında test dokümanlarına ait {leaked} karar eğitimden çıkarıldı)")
+    return X, y
+
+
+def load_base(db_path: Path | None = None) -> tuple[list[str], list[int]]:
     from app.ml.prototypes import MODALITY_PAIRS, NON_TASK_EXAMPLES, TASK_EXAMPLES
 
+    test_texts = _test_texts()
     X, y = [], []
-    for line in (ROOT / "samples" / "train" / "sentences.tsv").read_text(encoding="utf-8").splitlines():
-        if not line.strip() or line.startswith("#"):
-            continue
-        lab, text = line.split("\t", 1)
-        X.append(text.strip())
-        y.append(int(lab))
+    for f in sorted((ROOT / "samples" / "train").glob("*.tsv")):
+        n = 0
+        for line in f.read_text(encoding="utf-8").splitlines():
+            if not line.strip() or line.startswith("#") or "\t" not in line:
+                continue
+            lab, text = line.split("\t", 1)
+            text = text.strip()
+            if lab.strip() not in ("0", "1") or any(text in t for t in test_texts):
+                continue
+            X.append(text)
+            y.append(int(lab))
+            n += 1
+        print(f"  {f.name}: {n} cümle")
+    if db_path:
+        dx, dy = load_db_labels(db_path, test_texts)
+        print(f"  uygulama kararları ({db_path.name}): {len(dx)} cümle")
+        X += dx
+        y += dy
     X += TASK_EXAMPLES + [a for a, _ in MODALITY_PAIRS]
     y += [1] * (len(TASK_EXAMPLES) + len(MODALITY_PAIRS))
     X += NON_TASK_EXAMPLES + [b for _, b in MODALITY_PAIRS]
     y += [0] * (len(NON_TASK_EXAMPLES) + len(MODALITY_PAIRS))
-    return X, y
+    # Tekrarları çıkar (aynı cümle iki kaynaktan gelirse son etiket geçerli)
+    seen: dict[str, int] = {}
+    for text, lab in zip(X, y):
+        seen[text] = lab
+    return list(seen), list(seen.values())
 
 
 def load_validation_docs() -> list[tuple[str, list[str], list[int]]]:
@@ -133,6 +195,7 @@ def _setup_output(out: str | None) -> None:
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--model", default=None, help="GA_EMBED_MODEL değeri")
+    ap.add_argument("--db", default="gorev_asistani.db", help="lider kararlarının okunacağı veritabanı ('' = kullanma)")
     ap.add_argument("--out", default=None, help="çıktıyı UTF-8 olarak bu dosyaya da yaz")
     a = ap.parse_args()
     _setup_output(a.out)
@@ -143,7 +206,8 @@ def main():
     from app.ml.embedder import get_embedder
 
     embedder = get_embedder()
-    base_X, base_y = load_base()
+    print("Eğitim verisi:")
+    base_X, base_y = load_base(Path(a.db) if a.db else None)
     vdocs = load_validation_docs()
     print(f"Embedding modeli: {embedder.name}")
     print(f"Temel eğitim: {len(base_X)} cümle ({sum(base_y)} görev) · doğrulama: {len(vdocs)} doküman, "

@@ -6,6 +6,8 @@ Görev durumları:
   rejected   -> lider reddetti
   exported   -> iş takip sistemine (Jira vb.) aktarıldı / aktif
   done       -> tamamlandı
+  candidate  -> model eşiğin biraz altında buldu; lidere "görev mi?" diye soruluyor (aktif öğrenme)
+  dismissed  -> lider aday cümleye "görev değil" dedi
 """
 from datetime import date, datetime
 
@@ -102,6 +104,8 @@ class Task(Base):
     status: Mapped[str] = mapped_column(String(20), default="suggested")
     assignee_id: Mapped[str | None] = mapped_column(ForeignKey("users.id"), nullable=True)
     lead_picked_first: Mapped[bool] = mapped_column(Boolean, default=False)
+    # Reddedilme nedeni: not_task (cümle görev değil) | not_now (görev ama bu dokümandan atanmayacak)
+    reject_reason: Mapped[str | None] = mapped_column(String(20), nullable=True)
     decided_by: Mapped[str | None] = mapped_column(ForeignKey("users.id"), nullable=True)
     decided_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     assigned_by: Mapped[str | None] = mapped_column(ForeignKey("users.id"), nullable=True)

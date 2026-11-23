@@ -7,13 +7,24 @@ from app.seed import SPRINT_NOTE
 
 
 def test_encoder_extracts_with_aligned_sources_and_scores():
-    prov = EncoderProvider(HashingEmbedder())
+    prov = EncoderProvider(HashingEmbedder(), use_probe=False)
     tasks = prov.extract_tasks(SPRINT_NOTE, "meeting")
-    assert tasks
+    assert any(not t.candidate for t in tasks)
     for t in tasks:
         assert SPRINT_NOTE[t.source_start : t.source_end] == t.source_quote
-        assert 0.5 <= t.detect_score <= 1.0
+        assert 0.0 <= t.detect_score <= 1.0
+        assert (t.detect_score < 0.5) == t.candidate  # eşiğin altı = aktif öğrenme adayı
         assert t.tags
+
+
+def test_anonymize_masks_personal_data():
+    from app.services.anonymize import anonymize
+
+    text = "Ahmet Yılmaz'a ulaşın: ahmet@firma.com, 0532 123 45 67, TCKN 12345678901, IBAN TR12 0006 1005 1978 6457 8413 26."
+    out, counts = anonymize(text, ["Ahmet Yılmaz"])
+    for leak in ("Ahmet", "ahmet@", "0532", "12345678901", "TR12"):
+        assert leak not in out
+    assert "Kişi-1'a" in out and counts["[İSİM]"] == 1
 
 
 def test_hdbscan_groups_similar_and_flags_outlier():

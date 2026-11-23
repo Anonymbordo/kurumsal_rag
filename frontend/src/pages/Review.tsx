@@ -34,11 +34,14 @@ interface CardProps {
   canDecide: boolean
   focused: boolean
   onFocus: () => void
-  onDecide: (action: 'pick' | 'accept' | 'reject' | 'undo', assignee?: string) => Promise<void>
+  onDecide: (action: Action, assignee?: string, reason?: 'not_task' | 'not_now') => Promise<void>
 }
+
+type Action = 'pick' | 'accept' | 'reject' | 'undo' | 'promote' | 'dismiss'
 
 function TaskCard({ t, members, canDecide, focused, onFocus, onDecide }: CardProps) {
   const [editing, setEditing] = useState(false)
+  const [rejecting, setRejecting] = useState(false)
   const hidden = t.forcing && !t.assignee
   const who: Person | null = t.assignee ?? t.suggested
   const changed = !!(t.assignee && t.suggested && t.assignee.id !== t.suggested.id)
@@ -48,7 +51,7 @@ function TaskCard({ t, members, canDecide, focused, onFocus, onDecide }: CardPro
 
   const statusText =
     t.status === 'accepted' ? `✓ Onaylandı · ${who?.name}` :
-    t.status === 'rejected' ? 'Reddedildi · aktarılmayacak' :
+    t.status === 'rejected' ? (t.reject_reason === 'not_now' ? 'Reddedildi · görev ama şimdi değil' : 'Reddedildi · görev değil') :
     locked ? `${t.key} · ${t.status_label} · ${who?.name}` :
     hidden ? 'Önce kendi seçiminizi yapın' : 'Karar bekliyor'
 
@@ -149,7 +152,14 @@ function TaskCard({ t, members, canDecide, focused, onFocus, onDecide }: CardPro
               <button type="button" className="btn" onClick={() => onDecide('undo')}>Geri al</button>
             ) : (
               <>
-                <button type="button" className="btn" onClick={() => onDecide('reject')}>Reddet</button>
+                {rejecting ? (
+                  <>
+                    <button type="button" className="btn" onClick={() => onDecide('reject', undefined, 'not_task').then(() => setRejecting(false))}>Görev değil</button>
+                    <button type="button" className="btn" onClick={() => onDecide('reject', undefined, 'not_now').then(() => setRejecting(false))}>Görev ama şimdi değil</button>
+                  </>
+                ) : (
+                  <button type="button" className="btn" onClick={() => setRejecting(true)}>Reddet</button>
+                )}
                 {!hidden && <button type="button" className="btn" onClick={() => setEditing((v) => !v)}>Kişiyi değiştir</button>}
                 <button type="button" className="btn primary" disabled={hidden} onClick={() => onDecide('accept')}>Onayla</button>
               </>
@@ -184,6 +194,9 @@ export default function Review() {
     if (canDecide) api.teamMembers().then(setMembers)
   }, [canDecide, tasks])
 
+  const mainTasks = useMemo(() => tasks.filter((t) => t.status !== 'candidate' && t.status !== 'dismissed'), [tasks])
+  const candidates = useMemo(() => tasks.filter((t) => t.status === 'candidate' || t.status === 'dismissed'), [tasks])
+
   const counts = useMemo(() => {
     const c = { accepted: 0, rejected: 0, pending: 0 }
     for (const t of tasks) {
@@ -202,9 +215,9 @@ export default function Review() {
 
   const extract = () => run(async () => setTasks(await api.extract(docId)))
 
-  const decide = (t: Task) => (action: 'pick' | 'accept' | 'reject' | 'undo', assignee?: string) =>
+  const decide = (t: Task) => (action: Action, assignee?: string, reason?: 'not_task' | 'not_now') =>
     run(async () => {
-      const updated = await api.decide(t.id, action, assignee)
+      const updated = await api.decide(t.id, action, assignee, reason)
       setTasks((ts) => ts.map((x) => (x.id === updated.id ? updated : x)))
     })
 
@@ -240,14 +253,14 @@ export default function Review() {
             <p style={{ margin: '0 0 20px', fontSize: 13, color: 'var(--muted)' }}>
               Yükleyen: {doc.uploaded_by?.name} · {new Date(doc.created_at).toLocaleDateString('tr-TR', { day: 'numeric', month: 'long', year: 'numeric' })}
             </p>
-            <DocText text={doc.text ?? ''} tasks={tasks} focus={focus} />
+            <DocText text={doc.text ?? ''} tasks={tasks.filter((t) => t.status !== 'dismissed')} focus={focus} />
           </section>
 
           <section className="taskcol" aria-labelledby="tasks-title">
             <div className="panel summary">
               <div>
                 <h2 id="tasks-title">
-                  {tasks.length ? `Dokümandan ${tasks.length} görev çıkarıldı` : 'Henüz görev çıkarılmadı'}
+                  {mainTasks.length ? `Dokümandan ${mainTasks.length} görev çıkarıldı` : 'Henüz görev çıkarılmadı'}
                 </h2>
                 <p>Kişi atamaları modelin önerisidir. Her birini onaylayın, değiştirin ya da reddedin.</p>
               </div>
@@ -265,7 +278,7 @@ export default function Review() {
             )}
             {error && <div className="error" role="alert">{error}</div>}
 
-            {tasks.map((t) => (
+            {mainTasks.map((t) => (
               <TaskCard
                 key={t.id}
                 t={t}
@@ -277,7 +290,35 @@ export default function Review() {
               />
             ))}
 
-            {canDecide && tasks.length > 0 && (
+            {canDecide && candidates.length > 0 && (
+              <section className="panel" aria-labelledby="cand-title" style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                <div>
+                  <h2 id="cand-title" style={{ margin: 0, fontSize: 16 }}>Model emin olamadı: bunlar görev mi?</h2>
+                  <p style={{ margin: '4px 0 0', fontSize: 13, color: 'var(--muted)' }}>
+                    Eşiğin biraz altında kalan cümleler. Cevabınız modelin bir sonraki eğitiminde kullanılır.
+                  </p>
+                </div>
+                {candidates.map((c) => (
+                  <div key={c.id} className="card" style={{ flexDirection: 'row', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+                    <button type="button" className="btn small" onClick={() => focusOn(c)}>{c.source.ref}</button>
+                    <span style={{ flex: '1 1 300px', minWidth: 0, fontSize: 14 }}>{c.source.quote}</span>
+                    {c.detect_score != null && <span className="ws-chip">%{Math.round(c.detect_score * 100)}</span>}
+                    {c.status === 'candidate' ? (
+                      <div className="actions">
+                        <button type="button" className="btn small" onClick={() => decide(c)('dismiss')}>Değil</button>
+                        <button type="button" className="btn small primary" onClick={() => decide(c)('promote')}>Görev</button>
+                      </div>
+                    ) : (
+                      <span style={{ fontSize: 13, color: 'var(--muted)' }}>
+                        Görev değil · <button type="button" className="linkbtn" onClick={() => decide(c)('undo')}>Geri al</button>
+                      </span>
+                    )}
+                  </div>
+                ))}
+              </section>
+            )}
+
+            {canDecide && mainTasks.length > 0 && (
               <div className="exportbar">
                 <div className="counts">
                   <span><b>{counts.accepted}</b> onaylandı</span>

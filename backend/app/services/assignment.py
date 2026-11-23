@@ -128,7 +128,7 @@ def _reasons(c: Candidate) -> list[str]:
         reasons.append(f"Bu alanda {c.history_count} benzer görevi tamamladı")
     else:
         reasons.append("Bu alanda geçmiş işi az")
-    if c.sem_sim is not None and c.sem_example:
+    if c.sem_sim is not None and c.sem_example and c.sem_sim > 0.3:
         reasons.append(f"En benzer geçmiş işi: {c.sem_example} (benzerlik %{round(c.sem_sim * 100)})")
     reasons.append(f"Sprint yükü %{c.load}")
     return reasons

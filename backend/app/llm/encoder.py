@@ -118,7 +118,8 @@ class EncoderProvider:
         texts = [s.text for s in sents]
         scores = self.task_scores(texts)
         threshold = self.probe["threshold"] if self.probe else THRESHOLD
-        keep = [i for i, p in enumerate(scores) if p >= threshold]
+        low = threshold - get_settings().candidate_margin
+        keep = [i for i, p in enumerate(scores) if p >= low]
         if not keep:
             return []
         tags = self.tags_for(self.embedder.encode([texts[i] for i in keep]))
@@ -132,6 +133,7 @@ class EncoderProvider:
                 source_start=sents[i].start,
                 source_end=sents[i].end,
                 detect_score=float(scores[i]),
+                candidate=bool(scores[i] < threshold),
             )
             for i, tag in zip(keep, tags)
         ]
