@@ -10,6 +10,8 @@ STATUS_LABELS = {
     "rejected": "Reddedildi",
     "candidate": "Model emin değil",
     "dismissed": "Görev değil",
+    "announcement": "Duyuru",
+    "announced": "Ekiple paylaşılacak",
     "exported": "Devam ediyor",
     "done": "Tamamlandı",
 }
@@ -59,6 +61,8 @@ def task(db: Session, t: Task, users: dict[str, User]) -> dict:
         "detect_score": t.detect_score,
         "workstream": t.workstream,
         "is_outlier": t.is_outlier,
+        "kind": t.kind or "task",
+        "unknown_mentions": t.unknown_mentions or [],
         "status": t.status,
         "status_label": STATUS_LABELS.get(t.status, t.status),
         "lead_picked_first": t.lead_picked_first,

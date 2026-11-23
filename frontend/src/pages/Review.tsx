@@ -4,7 +4,7 @@ import { api } from '../api'
 import { Confidence } from '../components/Confidence'
 import { useApp } from '../context'
 import { IconAlert } from '../icons'
-import type { DocumentInfo, Person, Task, User } from '../types'
+import type { DocPerson, DocumentInfo, Person, Task, User } from '../types'
 
 /** Doküman metnini, görev kaynaklarını numaralı vurgularla gösterir. */
 function DocText({ text, tasks, focus }: { text: string; tasks: Task[]; focus: number | null }) {
@@ -35,11 +35,13 @@ interface CardProps {
   focused: boolean
   onFocus: () => void
   onDecide: (action: Action, assignee?: string, reason?: 'not_task' | 'not_now') => Promise<void>
+  showWorkstream: boolean
+  onAddPeople: (names: string[]) => void
 }
 
-type Action = 'pick' | 'accept' | 'reject' | 'undo' | 'promote' | 'dismiss'
+type Action = 'pick' | 'accept' | 'reject' | 'undo' | 'promote' | 'dismiss' | 'share'
 
-function TaskCard({ t, members, canDecide, focused, onFocus, onDecide }: CardProps) {
+function TaskCard({ t, members, canDecide, focused, onFocus, onDecide, showWorkstream, onAddPeople }: CardProps) {
   const [editing, setEditing] = useState(false)
   const [rejecting, setRejecting] = useState(false)
   const hidden = t.forcing && !t.assignee
@@ -68,13 +70,25 @@ function TaskCard({ t, members, canDecide, focused, onFocus, onDecide }: CardPro
           </div>
         </div>
         <div className="task-meta">
-          {t.workstream && <span className="ws-chip" title="HDBSCAN ile bulunan iş alanı">{t.workstream}</span>}
+          {showWorkstream && t.workstream && <span className="ws-chip" title="HDBSCAN ile bulunan iş alanı">{t.workstream}</span>}
           {t.is_outlier && <span className="ws-chip odd" title="Ekipte benzeri yapılmamış görev">Alışılmadık</span>}
           <span>Tahmini {t.est_days} gün</span>
           <span aria-hidden="true">·</span>
           <button type="button" className="btn small" onClick={onFocus}>Kaynak {t.source.ref}</button>
         </div>
       </div>
+
+      {t.unknown_mentions.length > 0 && !decided && !locked && (
+        <p className="inline-warn">
+          Cümlede adı geçen <b>{t.unknown_mentions.join(', ')}</b> ekipte kayıtlı değil, bu yüzden model başka birini
+          öneremiyor.{' '}
+          {canDecide && (
+            <button type="button" className="linkbtn" onClick={() => onAddPeople(t.unknown_mentions)}>
+              Ekibe ekle ve öneriyi yenile
+            </button>
+          )}
+        </p>
+      )}
 
       {hidden && canDecide ? (
         <div className="forcing">
@@ -174,7 +188,7 @@ function TaskCard({ t, members, canDecide, focused, onFocus, onDecide }: CardPro
 export default function Review() {
   const { id } = useParams()
   const docId = Number(id)
-  const { me, refreshSidebar } = useApp()
+  const { me, org, refreshSidebar } = useApp()
   const navigate = useNavigate()
   const [doc, setDoc] = useState<DocumentInfo | null>(null)
   const [tasks, setTasks] = useState<Task[]>([])
@@ -182,27 +196,33 @@ export default function Review() {
   const [focus, setFocus] = useState<number | null>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
+  const [people, setPeople] = useState<DocPerson[]>([])
+  const [skipPeople, setSkipPeople] = useState<Set<string>>(new Set())
   const canDecide = !!me?.is_lead
 
   useEffect(() => {
     setError('')
     api.document(docId).then(setDoc).catch((e) => setError((e as Error).message))
     api.documentTasks(docId).then(setTasks).catch(() => {})
+    api.documentPeople(docId).then(setPeople).catch(() => {})
   }, [docId])
 
   useEffect(() => {
     if (canDecide) api.teamMembers().then(setMembers)
   }, [canDecide, tasks])
 
-  const mainTasks = useMemo(() => tasks.filter((t) => t.status !== 'candidate' && t.status !== 'dismissed'), [tasks])
-  const candidates = useMemo(() => tasks.filter((t) => t.status === 'candidate' || t.status === 'dismissed'), [tasks])
+  const mainTasks = useMemo(() => tasks.filter((t) => t.kind !== 'announcement' && t.status !== 'candidate' && t.status !== 'dismissed'), [tasks])
+  const candidates = useMemo(() => tasks.filter((t) => t.kind !== 'announcement' && (t.status === 'candidate' || t.status === 'dismissed')), [tasks])
+  const announcements = useMemo(() => tasks.filter((t) => t.kind === 'announcement'), [tasks])
+  const unregistered = useMemo(() => people.filter((p) => !p.user_id), [people])
 
   const counts = useMemo(() => {
-    const c = { accepted: 0, rejected: 0, pending: 0 }
+    const c = { accepted: 0, rejected: 0, pending: 0, announced: 0 }
     for (const t of tasks) {
       if (t.status === 'accepted') c.accepted++
       else if (t.status === 'rejected') c.rejected++
       else if (t.status === 'suggested') c.pending++
+      else if (t.status === 'announced') c.announced++
     }
     return c
   }, [tasks])
@@ -214,6 +234,16 @@ export default function Review() {
   }
 
   const extract = () => run(async () => setTasks(await api.extract(docId)))
+
+  /** Dokümanda geçen kayıtsız kişileri ekibe ekle, ardından önerileri yeniden hesapla. */
+  const addPeople = (names: string[]) =>
+    run(async () => {
+      if (!names.length) return
+      await api.importPeople(docId, names)
+      setPeople(await api.documentPeople(docId))
+      if (tasks.length) setTasks(await api.extract(docId))
+      refreshSidebar()
+    })
 
   const decide = (t: Task) => (action: Action, assignee?: string, reason?: 'not_task' | 'not_now') =>
     run(async () => {
@@ -271,6 +301,52 @@ export default function Review() {
               </div>
             </div>
 
+            {canDecide && unregistered.length > 0 && (
+              <section className="panel" aria-labelledby="people-title" style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                <div>
+                  <h2 id="people-title" style={{ margin: 0, fontSize: 16 }}>
+                    Dokümanda geçen {unregistered.length} kişi ekipte kayıtlı değil
+                  </h2>
+                  <p style={{ margin: '4px 0 0', fontSize: 13, color: 'var(--muted)' }}>
+                    Model yalnızca kayıtlı ekip üyelerine görev önerebilir. Uzmanlık alanı, rolden tahmin edilir; sonra Ekip sayfasından düzeltebilirsiniz.
+                  </p>
+                </div>
+                <div className="choices">
+                  {unregistered.map((p) => {
+                    const on = !skipPeople.has(p.name)
+                    return (
+                      <button
+                        key={p.name}
+                        type="button"
+                        className={`choice${on ? ' on' : ''}`}
+                        aria-pressed={on}
+                        onClick={() =>
+                          setSkipPeople((s) => {
+                            const n = new Set(s)
+                            if (n.has(p.name)) n.delete(p.name)
+                            else n.add(p.name)
+                            return n
+                          })
+                        }
+                      >
+                        {p.name} {p.role && <span>· {p.role}{p.is_lead ? ' (lider)' : ''}</span>}
+                      </button>
+                    )
+                  })}
+                </div>
+                <div>
+                  <button
+                    type="button"
+                    className="btn primary"
+                    disabled={busy || unregistered.every((p) => skipPeople.has(p.name))}
+                    onClick={() => addPeople(unregistered.filter((p) => !skipPeople.has(p.name)).map((p) => p.name))}
+                  >
+                    Seçilenleri ekibe ekle{tasks.length ? ' ve önerileri yenile' : ''}
+                  </button>
+                </div>
+              </section>
+            )}
+
             {tasks.length === 0 && canDecide && (
               <button type="button" className="btn primary" onClick={extract} disabled={busy}>
                 {busy ? 'Çıkarılıyor…' : 'Görevleri çıkar'}
@@ -287,8 +363,39 @@ export default function Review() {
                 focused={focus === t.id}
                 onFocus={() => focusOn(t)}
                 onDecide={decide(t)}
+                showWorkstream={!!org?.show_workstreams}
+                onAddPeople={addPeople}
               />
             ))}
+
+            {canDecide && announcements.length > 0 && (
+              <section className="panel" aria-labelledby="ann-title" style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                <div>
+                  <h2 id="ann-title" style={{ margin: 0, fontSize: 16 }}>Duyurular: tek kişiye değil, tüm ekibe</h2>
+                  <p style={{ margin: '4px 0 0', fontSize: 13, color: 'var(--muted)' }}>
+                    Bunlar kişiye atanmaz. Paylaşılanlar aktarımda tüm ekibin "benimle paylaşılanlar" listesine düşer.
+                  </p>
+                </div>
+                {announcements.map((a) => (
+                  <div key={a.id} className="card" style={{ flexDirection: 'row', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+                    <button type="button" className="btn small" onClick={() => focusOn(a)}>{a.source.ref}</button>
+                    <span style={{ flex: '1 1 300px', minWidth: 0, fontSize: 14 }}>{a.source.quote}</span>
+                    {a.status === 'announcement' ? (
+                      <div className="actions">
+                        <button type="button" className="btn small" onClick={() => decide(a)('dismiss')}>Önemsiz</button>
+                        <button type="button" className="btn small" onClick={() => decide(a)('promote')}>Görev yap</button>
+                        <button type="button" className="btn small primary" onClick={() => decide(a)('share')}>Ekiple paylaş</button>
+                      </div>
+                    ) : (
+                      <span style={{ fontSize: 13, color: 'var(--muted)' }}>
+                        {a.status === 'announced' ? 'Ekiple paylaşılacak' : 'Paylaşılmayacak'} ·{' '}
+                        <button type="button" className="linkbtn" onClick={() => decide(a)('undo')}>Geri al</button>
+                      </span>
+                    )}
+                  </div>
+                ))}
+              </section>
+            )}
 
             {canDecide && candidates.length > 0 && (
               <section className="panel" aria-labelledby="cand-title" style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
@@ -318,17 +425,18 @@ export default function Review() {
               </section>
             )}
 
-            {canDecide && mainTasks.length > 0 && (
+            {canDecide && (mainTasks.length > 0 || announcements.length > 0) && (
               <div className="exportbar">
                 <div className="counts">
                   <span><b>{counts.accepted}</b> onaylandı</span>
                   <span><b>{counts.rejected}</b> reddedildi</span>
+                  {counts.announced > 0 && <span><b>{counts.announced}</b> duyuru</span>}
                   <span className="wait"><b>{counts.pending}</b> karar bekliyor</span>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
                   <span className="hint">{counts.pending ? 'Bekleyen görevler aktarılmaz' : 'Tüm görevler karara bağlandı'}</span>
-                  <button type="button" className="btn" disabled={!counts.accepted || busy} onClick={exportAccepted}>
-                    Onaylananları aktar ({counts.accepted})
+                  <button type="button" className="btn" disabled={!(counts.accepted || counts.announced) || busy} onClick={exportAccepted}>
+                    Onaylananları aktar ({counts.accepted}){counts.announced ? ` + ${counts.announced} duyuru` : ''}
                   </button>
                 </div>
               </div>

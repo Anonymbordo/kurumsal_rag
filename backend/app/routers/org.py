@@ -21,6 +21,7 @@ def org():
         "logo_url": s.org_logo_url or None,
         "model_label": s.llm_model_label,
         "llm_provider": s.llm_provider,
+        "show_workstreams": s.show_workstreams,
     }
 
 

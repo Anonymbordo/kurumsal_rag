@@ -1,6 +1,7 @@
 from datetime import date, datetime, timedelta
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
+from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -11,6 +12,8 @@ from ..models import Document, Task, User
 from ..services import audit
 from ..services.documents import UnsupportedFile, extract_text
 from ..services.extraction import extract_for_document
+from ..services.people import roster
+from ..services.team import create_member
 from ..timeutil import utcnow
 
 router = APIRouter(prefix="/api/documents", tags=["dokümanlar"])
@@ -120,9 +123,44 @@ def export(doc_id: int, user: User = Depends(require_lead), db: Session = Depend
         t.assigned_at = now
         t.due_date = t.due_date or (date.today() + timedelta(days=max(3, round(t.est_days * 2))))
         db.flush()
-    if tasks:
-        assignees = {t.assignee_id for t in tasks if t.assignee_id}
-        doc.shared_with = sorted(set(doc.shared_with or []) | assignees)
+    share = {t.assignee_id for t in tasks if t.assignee_id}
+    announced = db.scalars(select(Task).where(Task.document_id == doc.id, Task.status == "announced")).all()
+    if announced:
+        # Duyurular kişiye atanmaz; doküman tüm ekiple paylaşılır ("benimle ne paylaşıldı").
+        share |= set(db.scalars(select(User.id).where(User.team_id == doc.team_id, User.is_lead.is_(False))))
+    if share:
+        doc.shared_with = sorted(set(doc.shared_with or []) | share)
     audit.log(db, user.id, "document.export", f"document:{doc.id}", keys=[t.key for t in tasks])
     db.commit()
-    return {"exported": [{"id": t.id, "key": t.key} for t in tasks]}
+    return {"exported": [{"id": t.id, "key": t.key} for t in tasks], "announced": len(announced)}
+
+
+@router.get("/{doc_id}/people")
+def document_people(doc_id: int, user: User = Depends(current_user), db: Session = Depends(get_db)):
+    """Dokümanda rolüyle geçen kişiler ve ekipte kayıtlı olup olmadıkları."""
+    doc = _get_doc(db, doc_id, user)
+    members = list(db.scalars(select(User).where(User.team_id == doc.team_id)))
+    return [
+        {"name": p.name, "role": p.role, "user_id": p.user_id, "skills": p.skills, "is_lead": p.is_lead}
+        for p in roster(doc.text, members)
+    ]
+
+
+class ImportPeople(BaseModel):
+    names: list[str]
+
+
+@router.post("/{doc_id}/people/import")
+def import_people(doc_id: int, body: ImportPeople, user: User = Depends(require_lead), db: Session = Depends(get_db)):
+    """Dokümanda geçen kayıtsız kişileri ekibe ekler (rolden uzmanlık tahmini ile)."""
+    doc = _get_doc(db, doc_id, user)
+    members = list(db.scalars(select(User).where(User.team_id == doc.team_id)))
+    wanted = set(body.names)
+    added = []
+    for p in roster(doc.text, members):
+        if p.user_id is None and p.name in wanted:
+            u = create_member(db, user.team_id, p.name, p.role or "Ekip üyesi", p.skills, is_lead=p.is_lead)
+            added.append(u.id)
+    audit.log(db, user.id, "team.import", f"document:{doc.id}", added=added)
+    db.commit()
+    return {"added": added}

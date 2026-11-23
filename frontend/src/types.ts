@@ -5,6 +5,7 @@ export interface Org {
   logo_url: string | null
   model_label: string
   llm_provider: string
+  show_workstreams: boolean
 }
 
 export interface UserBrief {
@@ -46,7 +47,9 @@ export interface Task {
   detect_score: number | null
   workstream: string | null
   is_outlier: boolean
-  status: 'suggested' | 'accepted' | 'rejected' | 'exported' | 'done' | 'candidate' | 'dismissed'
+  kind: 'task' | 'announcement'
+  unknown_mentions: string[]
+  status: 'suggested' | 'accepted' | 'rejected' | 'exported' | 'done' | 'candidate' | 'dismissed' | 'announcement' | 'announced'
   reject_reason: 'not_task' | 'not_now' | null
   status_label: string
   lead_picked_first: boolean
@@ -130,4 +133,17 @@ export interface LabelPreview {
   sentences: string[]
   suggestions: number[] | null
   anonymized: Record<string, number>
+}
+
+export interface DocPerson {
+  name: string
+  role: string
+  user_id: string | null
+  skills: string[]
+  is_lead: boolean
+}
+
+export interface SkillOption {
+  id: string
+  label: string
 }

@@ -7,7 +7,9 @@ Görev durumları:
   exported   -> iş takip sistemine (Jira vb.) aktarıldı / aktif
   done       -> tamamlandı
   candidate  -> model eşiğin biraz altında buldu; lidere "görev mi?" diye soruluyor (aktif öğrenme)
-  dismissed  -> lider aday cümleye "görev değil" dedi
+  dismissed  -> lider aday cümleye / duyuruya "görev değil" dedi
+  announcement -> tüm ekibe yönelik bilgilendirme gibi görünüyor; kişiye atanmaz
+  announced  -> lider duyuruyu ekiple paylaşmayı onayladı (aktarımda tüm ekiple paylaşılır)
 """
 from datetime import date, datetime
 
@@ -99,6 +101,9 @@ class Task(Base):
     detect_score: Mapped[float | None] = mapped_column(Float, nullable=True)  # "görev mi" olasılığı
     workstream: Mapped[str | None] = mapped_column(String(120), nullable=True)  # HDBSCAN küme adı
     is_outlier: Mapped[bool] = mapped_column(Boolean, default=False)  # hiçbir kümeye girmedi
+    kind: Mapped[str] = mapped_column(String(20), default="task")  # task | announcement
+    # Cümlede adı geçen ama ekipte kayıtlı olmayan kişiler
+    unknown_mentions: Mapped[list] = mapped_column(JSON, default=list)
 
     # Karar
     status: Mapped[str] = mapped_column(String(20), default="suggested")

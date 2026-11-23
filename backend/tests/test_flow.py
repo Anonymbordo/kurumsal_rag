@@ -108,3 +108,50 @@ def test_labeling_preview_is_blind_for_test(client, tmp_path, monkeypatch):
     body = {"title": "deneme", "split": "test", "text": r["text"], "sentences": r["sentences"], "labels": ["task", "not_task"]}
     saved = client.post("/api/labeling/save", json=body, headers=LEAD).json()
     assert saved["tasks"] == 1 and (tmp_path / "test" / "gold.json").exists()
+
+
+DOC = """Haftalık Notlar
+Katılımcılar: Zehra Ak (Backend Geliştirici), Tuna Er (QA Mühendisi), Ayşe Kaya (Backend)
+Zehra rapor servisindeki zaman aşımını bu hafta çözmeli.
+Not: Cuma günü herkes güvenlik eğitimine katılmalı.
+Tuna yeni sürüm için regresyon testlerini hazırlamalı.
+"""
+
+
+def test_people_announcement_and_import(client):
+    doc = client.post("/api/documents", data={"text": DOC, "title": "Notlar"}, headers=LEAD).json()
+    people = client.get(f"/api/documents/{doc['id']}/people", headers=LEAD).json()
+    byname = {p["name"]: p for p in people}
+    assert byname["Ayşe Kaya"]["user_id"] == "ayse"
+    assert byname["Zehra Ak"]["user_id"] is None and byname["Zehra Ak"]["skills"] == ["backend"]
+    assert byname["Tuna Er"]["skills"] == ["qa"]
+
+    tasks = client.post(f"/api/documents/{doc['id']}/extract", headers=LEAD).json()
+    ann = [t for t in tasks if t["kind"] == "announcement"]
+    assert len(ann) == 1 and ann[0]["status"] == "announcement" and ann[0]["suggested"] is None
+    zehra = next(t for t in tasks if "Zehra" in t["source"]["quote"])
+    assert zehra["unknown_mentions"] == ["Zehra Ak"] and zehra["confidence"] == 1
+
+    r = client.post(f"/api/tasks/{ann[0]['id']}/decision", json={"action": "share"}, headers=LEAD)
+    assert r.json()["status"] == "announced"
+
+    added = client.post(f"/api/documents/{doc['id']}/people/import", json={"names": ["Zehra Ak", "Tuna Er"]}, headers=LEAD).json()
+    assert len(added["added"]) == 2
+    tasks = client.post(f"/api/documents/{doc['id']}/extract", headers=LEAD).json()
+    zehra = next(t for t in tasks if "Zehra" in t["source"]["quote"])
+    assert zehra["suggested"]["name"] == "Zehra Ak" and zehra["unknown_mentions"] == []
+    assert any(t["status"] == "announced" for t in tasks)  # karar verilen duyuru korunur
+
+    client.post(f"/api/documents/{doc['id']}/export", headers=LEAD)
+    shared = client.get("/api/documents/shared", headers=AYSE).json()
+    assert any(d["id"] == doc["id"] for d in shared)  # duyuru tüm ekiple paylaşıldı
+
+
+def test_team_member_crud(client):
+    u = client.post("/api/team/members", json={"name": "Deniz Mobil", "role": "iOS Geliştirici"}, headers=LEAD).json()
+    assert set(u["skills"]) == {"ios", "mobile"}
+    assert client.post("/api/team/members", json={"name": "X Y"}, headers=AYSE).status_code == 403
+    u2 = client.patch(f"/api/team/members/{u['id']}", json={"skills": ["qa"]}, headers=LEAD).json()
+    assert u2["skills"] == ["qa"]
+    assert client.delete(f"/api/team/members/{u['id']}", headers=LEAD).status_code == 200
+    assert client.delete("/api/team/members/ayse", headers=LEAD).status_code == 409

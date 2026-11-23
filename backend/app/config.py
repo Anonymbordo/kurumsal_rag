@@ -29,6 +29,8 @@ class Settings(BaseSettings):
     probe_path: str = "models/task_probe.joblib"
     # Kümeleme: bir iş alanı en az kaç görevden oluşsun
     cluster_min_size: int = 2
+    # HDBSCAN iş alanı adlarını arayüzde göster (küçük encoder'larda adlar anlamsız olabiliyor)
+    show_workstreams: bool = False
     llm_model_label: str = "Yerel model (mock)"
 
     # Sprint kapasitesi (kişi başı iş günü) — yük yüzdesi bunun üzerinden hesaplanır.

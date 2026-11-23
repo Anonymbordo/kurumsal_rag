@@ -18,7 +18,7 @@ router = APIRouter(prefix="/api/tasks", tags=["görevler"])
 
 
 class Decision(BaseModel):
-    action: Literal["pick", "accept", "reject", "undo", "promote", "dismiss"]
+    action: Literal["pick", "accept", "reject", "undo", "promote", "dismiss", "share"]
     assignee_id: str | None = None
     reason: Literal["not_task", "not_now"] | None = None  # reject için
 
@@ -31,11 +31,19 @@ def decide(task_id: int, body: Decision, user: User = Depends(require_lead), db:
     if t.status in ("exported", "done"):
         raise HTTPException(409, "Aktarılmış görev bu ekrandan değiştirilemez")
 
-    if t.status in ("candidate", "dismissed") and body.action not in ("promote", "dismiss", "undo"):
+    if t.status in ("candidate", "dismissed", "announcement", "announced") and body.action not in (
+        "promote", "dismiss", "undo", "share"
+    ):
         raise HTTPException(409, "Önce bu cümlenin görev olup olmadığına karar verin")
+    if body.action == "share" and t.kind != "announcement":
+        raise HTTPException(409, "Yalnızca duyurular ekiple paylaşılabilir")
 
     if body.action == "promote":
         promote_candidate(db, t)
+
+    elif body.action == "share":
+        t.status = "announced"
+        t.decided_by, t.decided_at = user.id, utcnow()
 
     elif body.action == "dismiss":
         t.status = "dismissed"
@@ -66,7 +74,10 @@ def decide(task_id: int, body: Decision, user: User = Depends(require_lead), db:
         t.decided_by, t.decided_at = user.id, utcnow()
 
     elif body.action == "undo":
-        t.status = "candidate" if t.status == "dismissed" else "suggested"
+        if t.kind == "announcement":
+            t.status = "announcement"
+        else:
+            t.status = "candidate" if t.status == "dismissed" else "suggested"
         t.reject_reason = None
         t.decided_by = t.decided_at = None
 

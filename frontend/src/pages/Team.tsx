@@ -1,7 +1,117 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type FormEvent } from 'react'
 import { Link } from 'react-router-dom'
 import { api } from '../api'
-import type { AccuracyRow, TeamLoad } from '../types'
+import { useApp } from '../context'
+import type { AccuracyRow, SkillOption, TeamLoad, User } from '../types'
+
+/** Ekip üyeleri: ekle, uzmanlık alanlarını düzelt, görev geçmişi olmayanı çıkar. */
+function Members({ onChange }: { onChange: () => void }) {
+  const [members, setMembers] = useState<User[]>([])
+  const [skills, setSkills] = useState<SkillOption[]>([])
+  const [name, setName] = useState('')
+  const [role, setRole] = useState('')
+  const [picked, setPicked] = useState<string[]>([])
+  const [error, setError] = useState('')
+
+  const load = () => api.teamMembers().then(setMembers)
+  useEffect(() => {
+    load()
+    api.skillOptions().then(setSkills)
+  }, [])
+
+  const label = (id: string) => skills.find((s) => s.id === id)?.label ?? id
+  const act = async (fn: () => Promise<unknown>) => {
+    setError('')
+    try {
+      await fn()
+      await load()
+      onChange()
+    } catch (e) {
+      setError((e as Error).message)
+    }
+  }
+
+  const add = (e: FormEvent) => {
+    e.preventDefault()
+    if (name.trim().length < 2) return
+    act(async () => {
+      // Uzmanlık seçilmezse sunucu rolden tahmin eder ("Backend Geliştirici" → backend)
+      await api.addMember({ name, role, skills: picked.length ? picked : undefined })
+      setName('')
+      setRole('')
+      setPicked([])
+    })
+  }
+
+  const toggle = (u: User, id: string) =>
+    act(() => api.updateMember(u.id, { skills: u.skills.includes(id) ? u.skills.filter((s) => s !== id) : [...u.skills, id] }))
+
+  return (
+    <section className="panel" style={{ padding: '22px 24px', display: 'flex', flexDirection: 'column', gap: 14 }}>
+      <div>
+        <h2 style={{ margin: 0, fontSize: 17 }}>Ekip üyeleri</h2>
+        <p style={{ margin: '4px 0 0', fontSize: 14, color: 'var(--muted)' }}>
+          Model yalnızca buradaki kişilere görev önerir. Kurum kurulumunda bu liste Active Directory'den gelir.
+        </p>
+      </div>
+      {members.map((u) => (
+        <div key={u.id} className="card" style={{ gap: 8 }}>
+          <div className="card-head">
+            <div>
+              <b>{u.name}</b> <span style={{ color: 'var(--muted)', fontSize: 13 }}>· {u.role} · yük %{u.load}</span>
+            </div>
+            <button type="button" className="linkbtn" onClick={() => act(() => api.removeMember(u.id))}>Çıkar</button>
+          </div>
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+            {skills.map((sk) => (
+              <button
+                key={sk.id}
+                type="button"
+                className={`choice${u.skills.includes(sk.id) ? ' on' : ''}`}
+                aria-pressed={u.skills.includes(sk.id)}
+                style={{ minHeight: 30, padding: '4px 10px', fontSize: 12 }}
+                onClick={() => toggle(u, sk.id)}
+              >
+                {sk.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      ))}
+      <form onSubmit={add} style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+          <label className="field" style={{ flex: '1 1 180px' }}>
+            <span>Ad Soyad</span>
+            <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Oğuzhan Tekin" />
+          </label>
+          <label className="field" style={{ flex: '1 1 180px' }}>
+            <span>Rol</span>
+            <input value={role} onChange={(e) => setRole(e.target.value)} placeholder="Mobil Geliştirici" />
+          </label>
+        </div>
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+          <span style={{ fontSize: 13, color: 'var(--muted)' }}>Uzmanlık (boş bırakılırsa rolden tahmin edilir):</span>
+          {skills.map((sk) => (
+            <button
+              key={sk.id}
+              type="button"
+              className={`choice${picked.includes(sk.id) ? ' on' : ''}`}
+              aria-pressed={picked.includes(sk.id)}
+              style={{ minHeight: 30, padding: '4px 10px', fontSize: 12 }}
+              onClick={() => setPicked((p) => (p.includes(sk.id) ? p.filter((x) => x !== sk.id) : [...p, sk.id]))}
+            >
+              {label(sk.id)}
+            </button>
+          ))}
+        </div>
+        <div>
+          <button type="submit" className="btn primary" disabled={name.trim().length < 2}>Ekibe ekle</button>
+        </div>
+      </form>
+      {error && <div className="error" role="alert">{error}</div>}
+    </section>
+  )
+}
 
 const ACC_COLORS: Record<number, string> = {
   3: 'var(--primary)',
@@ -13,9 +123,11 @@ export default function Team() {
   const [load, setLoad] = useState<TeamLoad | null>(null)
   const [acc, setAcc] = useState<AccuracyRow[]>([])
   const [fixes, setFixes] = useState<{ label: string; count: number }[]>([])
+  const { me } = useApp()
 
+  const reloadLoad = () => api.teamLoad().then(setLoad)
   useEffect(() => {
-    api.teamLoad().then(setLoad)
+    reloadLoad()
     api.accuracy().then(setAcc)
     api.corrections().then(setFixes)
   }, [])
@@ -94,6 +206,7 @@ export default function Team() {
               </ul>
             )}
           </section>
+          {me?.is_lead && <Members onChange={reloadLoad} />}
           <Link to="/yukle" className="btn">Yeni doküman yükle</Link>
         </aside>
       </div>

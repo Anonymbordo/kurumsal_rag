@@ -2,10 +2,12 @@ import type {
   AccuracyRow,
   ChatMessage,
   Conversation,
+  DocPerson,
   DocumentInfo,
   Group,
   LabelPreview,
   Org,
+  SkillOption,
   Task,
   TeamLoad,
   User,
@@ -77,10 +79,13 @@ export const api = {
   document: (id: number) => request<DocumentInfo>(`/api/documents/${id}`),
   extract: (id: number) => post<Task[]>(`/api/documents/${id}/extract`),
   documentTasks: (id: number) => request<Task[]>(`/api/documents/${id}/tasks`),
-  exportDocument: (id: number) => post<{ exported: { id: number; key: string }[] }>(`/api/documents/${id}/export`),
+  exportDocument: (id: number) =>
+    post<{ exported: { id: number; key: string }[]; announced: number }>(`/api/documents/${id}/export`),
+  documentPeople: (id: number) => request<DocPerson[]>(`/api/documents/${id}/people`),
+  importPeople: (id: number, names: string[]) => post<{ added: string[] }>(`/api/documents/${id}/people/import`, { names }),
   decide: (
     taskId: number,
-    action: 'pick' | 'accept' | 'reject' | 'undo' | 'promote' | 'dismiss',
+    action: 'pick' | 'accept' | 'reject' | 'undo' | 'promote' | 'dismiss' | 'share',
     assignee_id?: string,
     reason?: 'not_task' | 'not_now',
   ) => post<Task>(`/api/tasks/${taskId}/decision`, { action, assignee_id, reason }),
@@ -91,6 +96,12 @@ export const api = {
   labelStats: () => request<{ train_sentences: number; test_documents: number }>('/api/labeling/stats'),
 
   teamMembers: () => request<User[]>('/api/team/members'),
+  skillOptions: () => request<SkillOption[]>('/api/team/skills'),
+  addMember: (body: { name: string; role: string; skills?: string[]; base_load_days?: number }) =>
+    post<User>('/api/team/members', body),
+  updateMember: (id: string, body: { role?: string; skills?: string[]; base_load_days?: number }) =>
+    request<User>(`/api/team/members/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
+  removeMember: (id: string) => request<{ removed: string }>(`/api/team/members/${id}`, { method: 'DELETE' }),
   teamLoad: () => request<TeamLoad>('/api/team/load'),
   accuracy: () => request<AccuracyRow[]>('/api/stats/accuracy'),
   corrections: () => request<{ label: string; count: number }[]>('/api/stats/corrections'),

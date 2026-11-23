@@ -1,12 +1,17 @@
 from collections import Counter
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from ..db import get_db
-from ..deps import current_user
-from ..models import Task, User
+from .. import serialize as S
+from ..deps import current_user, require_lead
+from ..models import Conversation, Document, Task, User
+from ..services import audit
+from ..services.people import skills_for_role
+from ..services.team import create_member, has_tasks
 from ..services.assignment import CAPACITY_LIMIT_PCT, TAG_LABELS
 from ..services.load import base_pct, load_pct
 
@@ -74,3 +79,67 @@ def corrections(user: User = Depends(current_user), db: Session = Depends(get_db
                 if tag != "general":
                     c[TAG_LABELS.get(tag, tag)] += 1
     return [{"label": k, "count": v} for k, v in c.most_common(5)]
+
+
+class NewMember(BaseModel):
+    name: str = Field(min_length=2, max_length=120)
+    role: str = Field(default="", max_length=120)
+    skills: list[str] | None = None  # boşsa rolden tahmin edilir
+    base_load_days: float = 0.0
+    is_lead: bool = False
+
+
+class MemberPatch(BaseModel):
+    role: str | None = None
+    skills: list[str] | None = None
+    base_load_days: float | None = None
+
+
+@router.get("/team/skills")
+def skill_options():
+    return [{"id": k, "label": v} for k, v in TAG_LABELS.items() if k != "general"]
+
+
+@router.post("/team/members")
+def add_member(body: NewMember, user: User = Depends(require_lead), db: Session = Depends(get_db)):
+    skills = body.skills if body.skills is not None else skills_for_role(body.role)
+    skills = [s for s in skills if s in TAG_LABELS and s != "general"]
+    u = create_member(db, user.team_id, body.name, body.role, skills, body.base_load_days, body.is_lead)
+    audit.log(db, user.id, "team.add", f"user:{u.id}", name=u.name)
+    db.commit()
+    return S.user_full(db, u)
+
+
+@router.patch("/team/members/{uid}")
+def update_member(uid: str, body: MemberPatch, user: User = Depends(require_lead), db: Session = Depends(get_db)):
+    u = db.get(User, uid)
+    if u is None or u.team_id != user.team_id:
+        raise HTTPException(404, "Ekip üyesi bulunamadı")
+    if body.role is not None:
+        u.role = body.role.strip() or u.role
+    if body.skills is not None:
+        u.skills = sorted({s for s in body.skills if s in TAG_LABELS and s != "general"})
+    if body.base_load_days is not None:
+        u.base_load_days = max(0.0, body.base_load_days)
+    audit.log(db, user.id, "team.update", f"user:{u.id}")
+    db.commit()
+    return S.user_full(db, u)
+
+
+@router.delete("/team/members/{uid}")
+def remove_member(uid: str, user: User = Depends(require_lead), db: Session = Depends(get_db)):
+    u = db.get(User, uid)
+    if u is None or u.team_id != user.team_id:
+        raise HTTPException(404, "Ekip üyesi bulunamadı")
+    if u.id == user.id:
+        raise HTTPException(409, "Kendinizi ekipten çıkaramazsınız")
+    if (
+        has_tasks(db, u.id)
+        or db.scalar(select(Document.id).where(Document.uploaded_by == u.id).limit(1))
+        or db.scalar(select(Conversation.id).where(Conversation.user_id == u.id).limit(1))
+    ):
+        raise HTTPException(409, "Bu kişinin görev geçmişi var; denetim kaydı için silinemez")
+    db.delete(u)
+    audit.log(db, user.id, "team.remove", f"user:{uid}")
+    db.commit()
+    return {"removed": uid}
