@@ -9,9 +9,13 @@
   3. Alan etiketi -> etiket açıklamalarına benzerlik.
 Metin üretimi yapılmaz; başlık cümleden türetilir. Kısa başlık üretimi sonraki aşamadır.
 """
+from pathlib import Path
+
 import numpy as np
 
+from ..config import get_settings
 from ..ml.embedder import Embedder, get_embedder
+from ..ml.features import clauses, feature_matrix
 from ..ml.prototypes import MODALITY_PAIRS, NON_TASK_EXAMPLES, TAG_DESCRIPTIONS, TASK_EXAMPLES
 from .base import ChatTurn, ExtractedTask
 from .mock import MockProvider
@@ -33,8 +37,9 @@ def _topk_mean(sims: np.ndarray, k: int) -> np.ndarray:
 class EncoderProvider:
     name = "encoder"
 
-    def __init__(self, embedder: Embedder | None = None):
+    def __init__(self, embedder: Embedder | None = None, use_probe: bool = True):
         self.embedder = embedder or get_embedder()
+        self.probe = self._load_probe() if use_probe else None
         pair_task = self.embedder.encode([a for a, _ in MODALITY_PAIRS])
         pair_stat = self.embedder.encode([b for _, b in MODALITY_PAIRS])
         self._pos = np.vstack([self.embedder.encode(TASK_EXAMPLES), pair_task])
@@ -53,9 +58,38 @@ class EncoderProvider:
             cents.append(v / (np.linalg.norm(v) or 1.0))
         self._tags = np.stack(cents)
 
+    def _load_probe(self):
+        path = Path(get_settings().probe_path)
+        if not path.exists():
+            return None
+        import joblib
+
+        probe = joblib.load(path)
+        if probe.get("embed_model") != self.embedder.name:
+            return None  # başka bir embedding modeliyle eğitilmiş: kullanılamaz
+        return probe
+
+    @property
+    def method(self) -> str:
+        return "probe" if self.probe else "prototip"
+
+    def _probe_scores(self, sentences: list[str]) -> np.ndarray:
+        clf = self.probe["classifier"]
+        m = np.hstack([self.embedder.encode(sentences), feature_matrix(sentences)])
+        p = clf.predict_proba(m)[:, 1]
+        if self.probe.get("use_clauses"):
+            for i, s in enumerate(sentences):
+                parts = clauses(s)
+                if len(parts) > 1:
+                    pm = np.hstack([self.embedder.encode(parts), feature_matrix(parts)])
+                    p[i] = max(p[i], clf.predict_proba(pm)[:, 1].max())
+        return p
+
     def task_scores(self, sentences: list[str]) -> np.ndarray:
         if not sentences:
             return np.zeros(0)
+        if self.probe:
+            return self._probe_scores(sentences)
         e = self.embedder.encode(sentences)
         margin = _topk_mean(e @ self._pos.T, TOP_K) - _topk_mean(e @ self._neg.T, TOP_K)
         prior = np.array([RULE_PRIOR if OBLIGATION.search(s) else 0.0 for s in sentences])
@@ -83,7 +117,8 @@ class EncoderProvider:
             return []
         texts = [s.text for s in sents]
         scores = self.task_scores(texts)
-        keep = [i for i, p in enumerate(scores) if p >= THRESHOLD]
+        threshold = self.probe["threshold"] if self.probe else THRESHOLD
+        keep = [i for i, p in enumerate(scores) if p >= threshold]
         if not keep:
             return []
         tags = self.tags_for(self.embedder.encode([texts[i] for i in keep]))

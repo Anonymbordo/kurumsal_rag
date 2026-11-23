@@ -21,6 +21,8 @@ class Settings(BaseSettings):
     llm_provider: str = "mock"  # mock | encoder
     # encoder sağlayıcısının embedding modeli (Hugging Face adı) ya da "hashing" (indirme yok)
     embed_model: str = "intfloat/multilingual-e5-small"
+    # Eğitilmiş görev sınıflandırıcısı (scripts/train_probe.py üretir). Yoksa prototip yöntemi kullanılır.
+    probe_path: str = "models/task_probe.joblib"
     # Kümeleme: bir iş alanı en az kaç görevden oluşsun
     cluster_min_size: int = 2
     llm_model_label: str = "Yerel model (mock)"

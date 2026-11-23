@@ -1,5 +1,5 @@
 {
-  "_aciklama": "BAĞIMSIZ TEST SETİ. Dokümanları başka bir model (Gemini) yazdı; etiketler model çıktısı görülmeden verildi. Bu sete bakarak eşik/prototip AYARLANMAZ. 'belirsiz' cümleler puanlamaya katılmaz.",
+  "_aciklama": "TEST SETİ. sprint_planlama_gemini.pdf geliştirme sırasında incelendi (hataları görüldü), bu yüzden bu dosyadaki skor İYİMSERDİR. Temiz ölçüm için yeni, hiç bakılmamış PDF'ler eklenmeli. Bu sete bakarak eşik/prototip/eğitim verisi AYARLANMAZ. 'ambiguous' cümleler puanlanmaz.",
   "sprint_planlama_gemini.pdf": {
     "tasks": [
       "darboğazı bulabilir mi",

@@ -102,15 +102,25 @@ def main():
     from app.llm.mock import MockProvider
 
     provs = []
-    for name, factory in (("mock (kural tabanlı)", MockProvider), ("encoder", EncoderProvider)):
+    for name, factory in (
+        ("mock (kural tabanlı)", MockProvider),
+        ("prototip", lambda: EncoderProvider(use_probe=False)),
+        ("probe", EncoderProvider),
+    ):
         t0 = time.perf_counter()
         prov = factory()
-        label = name if name.startswith("mock") else f"encoder ({prov.embedder.name})"
+        if name == "probe" and prov.method != "probe":
+            print("(eğitilmiş probe yok ya da başka modelle eğitilmiş: python scripts/train_probe.py)")
+            continue
+        label = name if name.startswith("mock") else f"{name} ({prov.embedder.name.split('/')[-1]})"
         provs.append((label, prov, time.perf_counter() - t0))
 
     for set_name, docs in SETS.items():
         n = sum(len(d[2]["tasks"] if isinstance(d[2], dict) else d[2]) for d in docs)
         print(f"\n== {set_name}: {len(docs)} doküman, {n} görev")
+        if not set_name.startswith("TEST") and any(l.startswith("probe") for l, _, _ in provs):
+            print("   (probe bu dokümanlarla EĞİTİLDİ; buradaki probe skoru iyimser. Dürüst doğrulama skoru"
+                  " train_probe.py'nin çapraz doğrulama çıktısıdır.)")
         print(f"{'sağlayıcı':<44} kesinlik  duyarlılık  F1")
         for label, prov, load in provs:
             t0 = time.perf_counter()

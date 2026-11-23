@@ -17,3 +17,6 @@ frontend/dist/
 # Kurum marka dosyaları (logo vb.) repoya girmez
 frontend/public/brand/*
 !frontend/public/brand/.gitkeep
+
+# Yerelde eğitilen modeller
+backend/models/

@@ -1,0 +1,107 @@
+# etiket<TAB>cümle — 1: görev (yapılacak iş), 0: görev değil. Test setinden (samples/test) BAĞIMSIZ yazıldı.
+1	Kampanya sayfasındaki indirim kodu alanı mobilde taşıyor, düzeltilmesi gerekiyor.
+1	Hüseyin, müşteri segment raporunu pazartesiye kadar hazırlayabilir misin?
+1	Bildirim tercihleri ekranına sessiz saat ayarı eklenmeli.
+1	Ödeme sağlayıcısının yeni sertifikası sisteme yüklenmeli.
+1	Arama motorundaki yazım hatası toleransı artırılsın.
+1	Gizem kullanıcı görüşmelerinin notlarını ortak klasöre yükleyecek.
+1	Veri tabanı bağlantı havuzu ayarları gözden geçirilmeli, gece işlerinde zaman aşımı alıyoruz.
+1	Ekran okuyucu desteği için butonlara açıklama etiketleri eklenecek.
+1	Kayıt formundaki telefon doğrulaması → Oğuz
+1	Destek ekibinden gelen şikâyetler kategorilere ayrılıp haftalık rapora eklensin.
+1	Tuna, yeni sürüm notlarını yazıp bana iletirsen sevinirim.
+1	Yedekten geri dönme prosedürü bir kez test ortamında denenmeli.
+1	Yüklenici, sistemin %99,9 erişilebilirlik hedefini karşılayacak altyapıyı kuracaktır.
+1	Teslimat kapsamında kaynak kodu ve kurulum dokümanı idareye teslim edilecektir.
+1	Kullanıcı şifreleri tuzlanmış özet algoritmasıyla saklanacaktır.
+1	Yüklenici, tespit edilen kritik açıkları 48 saat içinde kapatacaktır.
+1	Raporlama servisi için birim testleri yazılmalı.
+1	Eski API anahtarları iptal edilip yenileri dağıtılmalı.
+1	Mobil uygulamanın çökme raporları için bir izleme panosu kurulsun.
+1	Kerem ile Derya giriş sayfasının A/B testini birlikte kurgulayacak.
+1	Sipariş geçmişi ekranında sayfalama yok, eklenmesi lazım.
+1	Hata loglarındaki kişisel veriler anonimleştirilmeli.
+1	Kredi hesaplama modülündeki yuvarlama farkı incelenmeli.
+1	Sunucu disklerinin doluluk alarmı %80'e çekilsin.
+1	Burcu, dağıtım hattına statik kod analizini ekleyebilir misin?
+1	Erişim yetkileri üç ayda bir gözden geçirilmeli; ilk kontrolü bu ay Serkan yapsın.
+1	İade sürecinin akış şeması çizilip ekip sayfasına konulmalı.
+1	Bu sprintte döviz kuru servisine önbellek eklenecek.
+1	Yeni çalışan eğitimi için kısa bir oryantasyon dokümanı hazırlanmalı.
+1	Kart başvuru formunda adres alanı zorunlu hale getirilmeli.
+1	Test verisi üretimi otomatikleştirilmeli, elle hazırlamak çok vakit alıyor.
+1	Ödeme onay e-postasının şablonu yenilensin.
+1	Lütfen herkes kendi modülünün bağımlılık sürümlerini güncellesin.
+1	Merve sözleşme taslağını hukuk ekibine gönderecek.
+1	Uygulama açılış süresi ölçülüp iki saniyenin altına indirilmeli.
+1	Push bildirim servisinin yeniden deneme mantığı yazılacak.
+1	Volkan staging'deki SSL hatasına baksın.
+1	Kullanıcı sözleşmesindeki yeni madde uygulamaya yansıtılmalı.
+1	Eski raporlama tablolarının silinmesi için bir göç betiği hazırlanmalı.
+1	İzin talep ekranına yönetici onayı adımı eklenecek.
+1	Ödeme iptal akışındaki kenar durumlar için test senaryoları yazılsın.
+1	Barış, CI süresini kısaltmak için paralel test koşumunu dener misin?
+1	Sistem, başarısız giriş denemelerini beş denemeden sonra kilitleyecektir.
+1	Arayüzdeki tüm metinler İngilizceye çevrilmeli.
+1	Log saklama süresi mevzuata göre iki yıla çıkarılmalı.
+1	Müşteri hizmetleri için yeni ekranın kullanım kılavuzu yazılacak.
+1	Hesap kapatma talebi → Ece
+1	Veri ambarı sorgularından en yavaş beşi optimize edilsin.
+1	Canlı ortama çıkmadan önce güvenlik ekibinden onay alınmalı.
+1	Ali, mobil uygulamanın erişilebilirlik denetimini bu hafta yapabilir misin?
+1	Kampanya bitince geçici özellik bayrakları kaldırılmalı.
+1	Rate limit aşımlarında kullanıcıya anlamlı bir hata mesajı gösterilsin.
+1	Şifre sıfırlama bağlantısının süresi on beş dakikayla sınırlandırılmalı.
+1	Sunucu maliyetleri çıkarılıp gelecek ayki bütçe toplantısına sunulmalı.
+1	Yeni mikroservis için sağlık kontrolü uç noktası eklenmeli.
+1	Destek talebi formunda dosya ekleme limiti 10 MB'a çıkarılsın.
+1	Öykü, kullanıcı anketinin sorularını hazırlayıp ekiple paylaşacak.
+0	Geçen sprintteki kampanya modülü sorunsuz yayına alındı.
+0	Toplantıya tasarım ekibinden iki kişi de katıldı.
+0	Arama servisinin yanıt süresi geçen haftaya göre iyileşti.
+0	Kerem şu an sepet servisinin yeniden yazımı üzerinde çalışıyor.
+0	Bildirim servisindeki bellek sızıntısı dün giderildi.
+0	Müşteri memnuniyet skoru bu çeyrekte 4,3'e yükseldi.
+0	Yeni tasarım sistemi geçen ay tüm ekranlara uygulandı.
+0	Herkesin kod yazarken daha özenli olması gerekir.
+0	Ekip olarak iletişimimizi güçlü tutmamız gerekiyor.
+0	Bir sonraki planlama toplantısı perşembe günü saat 14:00'te yapılacak.
+0	Önümüzdeki ay ekibe iki yeni geliştirici katılacak.
+0	Bayram tatili nedeniyle çarşamba günü ofis kapalı olacak.
+0	Bu şartname, mobil uygulamanın teknik gereksinimlerini kapsar.
+0	Mevcut çağrı merkezi entegrasyonu bu projenin kapsamı dışındadır.
+0	Bu dokümanda geçen kullanıcı ifadesi kurumsal müşterileri de kapsar.
+0	Emeği geçen herkese teşekkürler.
+0	Veri tabanı göçü planlandığı gibi tamamlandı.
+0	Kullanıcıların yüzde altmışı uygulamaya mobil cihazdan giriyor.
+0	Yük testi sonuçları beklentilerin üzerinde çıktı.
+0	Güvenlik denetimi raporu geçen hafta yayımlandı.
+0	Hata takip sistemi şu anda Jira üzerinde çalışıyor.
+0	Mimari kurul önerilen yaklaşımı onayladı.
+0	Sistem şu an üç ayrı veri merkezinde çalışıyor.
+0	Geçen yılın kampanya döneminde trafik üç katına çıkmıştı.
+0	Tasarım ekibi yeni ikon setini paylaştı.
+0	Melis bu hafta izinde.
+0	Pazarlama ekibi kampanya takvimini netleştirdi.
+0	Yeni sürüm App Store onayından geçti.
+0	Katılımcılar: Oğuz, Melis, Tuna, Derya
+0	Gündem maddeleri toplantıdan önce paylaşıldı.
+0	API dokümantasyonu güncel durumda.
+0	Destek ekibi geçen ay 1200 talebe yanıt verdi.
+0	Cuma günü öğleden sonra ekip yemeği var.
+0	Bu konuda ekibin deneyimi oldukça fazla.
+0	Kurul, bütçenin yeterli olduğunu düşünüyor.
+0	Güvenlik ekibi yeni politikayı tüm ekiplere duyurdu.
+0	Mobil uygulamanın 4.2 sürümü yarın mağazaya çıkacak.
+0	Teknik borç listesi geçen sprint gözden geçirildi.
+0	Canlı ortamdaki hata oranı yüzde birin altında seyrediyor.
+0	Hafta sonu yapılan bakım çalışması başarıyla tamamlandı.
+0	Yeni gelen stajyerler bu hafta oryantasyon eğitimine katılıyor.
+0	Sprint hedeflerinin büyük bölümüne ulaşıldı.
+0	Müşteriler yeni arayüzden genel olarak memnun.
+0	Bir sonraki demo ayın son cuma günü yapılacak.
+0	Ödeme servisi geçen ay hiç kesinti yaşamadı.
+0	Bu sprint içinde yeni bir özellik geliştirmeye gerek yok.
+0	Proje yöneticisi takvimi paylaştı, herkes görebiliyor.
+0	Kod tabanında şu an yaklaşık 400 birim test var.
+0	Ekip toplantıları bundan sonra salı ve perşembe günleri olacak.
