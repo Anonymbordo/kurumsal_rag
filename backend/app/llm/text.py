@@ -31,9 +31,21 @@ def _is_title_line(line: str, first: bool) -> bool:
     t = line.strip()
     if SECTION.search(t) or BULLET.match(t):
         return False
-    if first and not re.search(r"[.!?]$", t) and len(t.split()) <= 12:
+    words = t.split()
+    if first and not re.search(r"[.!?]$", t) and len(words) <= 12:
         return True
-    return t.endswith(":") and len(t.split()) <= 8
+    if t.endswith(":") and len(words) <= 8:
+        return True
+    # Ara başlık: "Teknik Borçlar, Altyapı ve Açık Sorular" — kısa, noktalamasız, çoğu kelime büyük harfle
+    content = [w for w in words if len(w) > 2]
+    caps = sum(1 for w in content if w[0].isupper())
+    return (
+        not re.search(r"[.!?]$", t)
+        and len(words) <= 8
+        and bool(content)
+        and caps / len(content) >= 0.6
+        and not OBLIGATION.search(t)
+    )
 
 
 def split_sentences(document_text: str, min_len: int = 15) -> list[Sentence]:
@@ -84,5 +96,7 @@ def estimate_days(text: str) -> float:
 def title_from(sentence: str) -> str:
     s = sentence.strip().rstrip(".;:")
     s = re.sub(r"^(bu nedenle|ayrıca|ancak|ve|bu sprintte)\s+", "", s, flags=re.IGNORECASE)
-    s = s[0].upper() + s[1:] if s else s
+    first = s.split()[0] if s else ""
+    if s and not any(ch.isupper() for ch in first[1:]):  # "iOS", "eKYC" gibi kelimeleri bozma
+        s = s[0].upper() + s[1:]
     return s if len(s) <= 110 else s[:107].rstrip() + "…"

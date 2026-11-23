@@ -15,7 +15,7 @@ from ..config import get_settings
 from ..llm import get_provider
 from ..ml.clustering import cluster
 from ..ml.embedder import Embedder, HashingEmbedder
-from ..models import Document, Task
+from ..models import Document, Task, User
 from .assignment import SemanticMap, suggest
 
 OUTLIER_REASON = "Ekipte benzeri yapılmamış, alışılmadık bir görev"
@@ -70,12 +70,16 @@ def extract_for_document(db: Session, doc: Document) -> list[Task]:
         all_texts,
         np.vstack([hist_vecs, new_vecs]) if len(hist_texts) and len(new_texts) else new_vecs,
         get_settings().cluster_min_size,
+        exclude_words={u.name.split()[0] for u in db.scalars(select(User))},
     ) if new_texts else None
 
     tasks: list[Task] = []
+    pending: dict[str, float] = {}  # bu dokümanda şimdiye kadar önerilen iş günleri (yük dengeleme)
     for i, ex in enumerate(extracted):
         semantic = _semantic_map(new_vecs[i], history, hist_vecs) if semantic_ok else None
-        s = suggest(db, doc.team_id, ex.tags, semantic)
+        s = suggest(db, doc.team_id, ex.tags, semantic, text=ex.source_quote, pending_days=pending)
+        if s.assignee_id:
+            pending[s.assignee_id] = pending.get(s.assignee_id, 0.0) + ex.est_days
         confidence, reasons = s.confidence, list(s.reasons)
 
         workstream, outlier = None, False

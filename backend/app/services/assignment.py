@@ -4,11 +4,13 @@ Bilinçli olarak LLM'den ayrı, açıklanabilir bir puanlama: her öneri, lideri
 görebileceği gerekçelere (uzmanlık eşleşmesi, geçmiş benzer işler, iş yükü)
 dayanır. Ağırlıklar ve eşikler kurum verisiyle ayarlanmalıdır.
 """
+import re
 from dataclasses import dataclass
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from ..config import get_settings
 from ..models import Task, User
 from .load import load_pct
 
@@ -59,8 +61,27 @@ def _history_count(db: Session, user_id: str, tags: list[str]) -> int:
 SemanticMap = dict[str, tuple[float, str]]  # user_id -> (en yüksek benzerlik, o işin adı)
 
 
+def mentioned_members(text: str, members: list[User]) -> list[User]:
+    """Cümlede adı geçen ekip üyeleri, geçiş sırasına göre.
+
+    Türkçe ekleri tolere eder: "Selin," "Ayşe'den" "Elif & Can". Büyük harf duyarlıdır
+    ("can" kelimesi ile "Can" ismi karışmasın diye).
+    """
+    found: list[tuple[int, User]] = []
+    for u in members:
+        first = u.name.split()[0]
+        m = re.search(rf"(?<![\wçğıöşüÇĞİÖŞÜ]){re.escape(first)}(?=$|[\s,.;:!?&)'’→-])", text)
+        if m:
+            found.append((m.start(), u))
+    return [u for _, u in sorted(found, key=lambda x: x[0])]
+
+
 def rank_candidates(
-    db: Session, team_id: str, tags: list[str], semantic: SemanticMap | None = None
+    db: Session,
+    team_id: str,
+    tags: list[str],
+    semantic: SemanticMap | None = None,
+    pending_days: dict[str, float] | None = None,
 ) -> list[Candidate]:
     members = db.scalars(select(User).where(User.team_id == team_id, User.is_lead.is_(False))).all()
     tagset = set(tags) - {"general"}
@@ -71,7 +92,7 @@ def rank_candidates(
         matched = sorted(tagset & set(u.skills))
         skill = len(matched) / len(tagset) if tagset else 0.0
         hist = _history_count(db, u.id, list(tagset))
-        load = load_pct(db, u)
+        load = load_pct(db, u) + round((pending_days or {}).get(u.id, 0.0) / get_settings().sprint_capacity_days * 100)
         free = max(0.0, 1 - load / 100)
         if semantic:
             sem = (sims[u.id] - lo) / (hi - lo) if hi > lo else 0.0  # adaylar arasında 0–1'e ölçekle
@@ -113,10 +134,32 @@ def _reasons(c: Candidate) -> list[str]:
     return reasons
 
 
-def suggest(db: Session, team_id: str, tags: list[str], semantic: SemanticMap | None = None) -> Suggestion:
-    ranked = rank_candidates(db, team_id, tags, semantic)
+def suggest(
+    db: Session,
+    team_id: str,
+    tags: list[str],
+    semantic: SemanticMap | None = None,
+    text: str = "",
+    pending_days: dict[str, float] | None = None,
+) -> Suggestion:
+    ranked = rank_candidates(db, team_id, tags, semantic, pending_days)
     if not ranked:
         return Suggestion(None, None, 1, ["Ekipte uygun kişi bulunamadı"])
+
+    # Dokümanda adı açıkça geçen ekip üyesi en güçlü sinyaldir.
+    named = mentioned_members(text, [c.user for c in ranked]) if text else []
+    if named:
+        by_id = {c.user.id: c for c in ranked}
+        first = by_id[named[0].id]
+        reasons = [f"Dokümanda adı geçiyor: {first.user.name}"] + _reasons(first)[1:]
+        alt = by_id[named[1].id] if len(named) > 1 else None
+        if alt:
+            reasons.insert(1, f"{alt.user.name} da aynı görevde anılıyor")
+        elif first.load >= OVERLOAD_PCT:
+            free = [c for c in ranked if c.user.id != first.user.id and c.load < CAPACITY_LIMIT_PCT]
+            alt = free[0] if free else None
+        return Suggestion(first.user.id, alt.user.id if alt else None, 3, reasons)
+
     top = ranked[0]
     alt = None
     if top.load >= OVERLOAD_PCT:

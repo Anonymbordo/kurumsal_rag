@@ -22,6 +22,8 @@ STOPWORDS = {
     "ama", "fakat", "ancak", "veya", "ile", "bu", "şu", "o", "her", "tüm", "yeni", "eski", "kısa",
     "göre", "kadar", "üzere", "dair", "ise", "hem", "de", "da", "ki", "mi", "ve", "the", "and",
     "gerekiyor", "gerekir", "şart", "yapılacak", "edilecek", "düşüyor", "yaz", "taşı",
+    "üzerine", "üzerinde", "tarafında", "tarafı", "sonrası", "geçen", "bazı", "hâlâ", "hala", "şu", "an",
+    "bir", "ara", "bakabilir", "kontrol", "etsin", "olabilir", "kadar", "beraber",
 }
 WORD = re.compile(r"[a-zçğıöşü0-9]+", re.IGNORECASE)
 STEM_LEN = 5  # Türkçe eklemeli: kaba kök için ilk 5 harf
@@ -46,17 +48,31 @@ def _tokens(text: str) -> list[str]:
     return out
 
 
-def name_clusters(texts: list[str], labels: np.ndarray, top_n: int = 2) -> dict[int, str]:
-    """c-TF-IDF: bir kümede sık geçen ama diğer kümelerde seyrek olan kökler."""
+def name_clusters(
+    texts: list[str], labels: np.ndarray, top_n: int = 2, exclude: set[str] | None = None
+) -> dict[int, str]:
+    """c-TF-IDF: bir kümede sık geçen ama diğer kümelerde seyrek olan kökler.
+
+    Bir kök, kümenin en az iki öğesinde geçmiyorsa ad olarak kullanılmaz (tek cümleye
+    özgü kelimeler küme adı olamaz). Uygun kök yoksa küme adsız kalır.
+    """
+    exclude = {e.lower()[:STEM_LEN] for e in (exclude or set())}
     stem_counts: dict[int, Counter] = defaultdict(Counter)
     surface: dict[str, Counter] = defaultdict(Counter)  # kök -> görülen kelime biçimleri
+    doc_freq: dict[int, Counter] = defaultdict(Counter)  # kök kümenin kaç öğesinde geçiyor
     for text, lab in zip(texts, labels):
         if lab < 0:
             continue
+        seen = set()
         for w in _tokens(text):
             stem = w[:STEM_LEN]
+            if stem in exclude:
+                continue
             stem_counts[int(lab)][stem] += 1
             surface[stem][w] += 1
+            seen.add(stem)
+        for stem in seen:
+            doc_freq[int(lab)][stem] += 1
     if not stem_counts:
         return {}
     n_clusters = len(stem_counts)
@@ -65,12 +81,13 @@ def name_clusters(texts: list[str], labels: np.ndarray, top_n: int = 2) -> dict[
     for lab, counts in stem_counts.items():
         total = sum(counts.values()) or 1
         scored = sorted(
-            counts,
+            [st for st in counts if doc_freq[lab][st] >= 2],
             key=lambda s: (counts[s] / total) * math.log(1 + n_clusters / df[s]),
             reverse=True,
         )
         words = [surface[s].most_common(1)[0][0] for s in scored[:top_n]]
-        names[lab] = " · ".join(words) if words else f"Alan {lab + 1}"
+        if words:
+            names[lab] = " · ".join(words)
     return names
 
 
@@ -88,7 +105,9 @@ def nn_outliers(vecs: np.ndarray, z: float = 3.0) -> np.ndarray:
     return (med - nn) / mad > z
 
 
-def cluster(texts: list[str], vecs: np.ndarray, min_cluster_size: int = 2) -> ClusterResult:
+def cluster(
+    texts: list[str], vecs: np.ndarray, min_cluster_size: int = 2, exclude_words: set[str] | None = None
+) -> ClusterResult:
     n = len(texts)
     if n < max(4, min_cluster_size * 2):
         return ClusterResult(np.full(n, -1), {}, np.zeros(n, dtype=bool))
@@ -102,4 +121,4 @@ def cluster(texts: list[str], vecs: np.ndarray, min_cluster_size: int = 2) -> Cl
     # "alışılmadık" ise benzeri hiç olmayan öğe. Ikincisi yalnızca komşu benzerliğinden gelir.
     outliers = nn_outliers(vecs)
     labels = np.where(outliers, -1, labels)
-    return ClusterResult(labels, name_clusters(texts, labels), outliers)
+    return ClusterResult(labels, name_clusters(texts, labels, exclude=exclude_words), outliers)

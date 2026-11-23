@@ -41,3 +41,16 @@ def test_too_few_items_are_not_clustered():
     texts = ["a görev", "b görev"]
     res = cluster(texts, HashingEmbedder().encode(texts))
     assert list(res.labels) == [-1, -1] and res.names == {} and not res.outliers.any()
+
+
+def test_mentioned_members_handles_turkish_suffixes():
+    from types import SimpleNamespace as U
+
+    from app.services.assignment import mentioned_members
+
+    team = [U(id=i, name=n) for i, n in [("a", "Ayşe Kaya"), ("c", "Can Yıldız"), ("e", "Elif Tunç"), ("s", "Selin Arslan")]]
+    names = lambda t: [u.id for u in mentioned_members(t, team)]
+    assert names("Selin, smoke test paketini küçültmeli.") == ["s"]
+    assert names("Ayşe'den zaman aşımını gözden geçirmesini rica ediyorum.") == ["a"]
+    assert names("Kısıt eklenmeli (Elif & Can beraber ilerleyebilir).") == ["e", "c"]
+    assert names("Bu iş can sıkıcı ama yapılmalı.") == []  # küçük harf "can" isim değil
