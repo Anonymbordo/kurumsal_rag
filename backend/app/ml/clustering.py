@@ -29,8 +29,9 @@ STEM_LEN = 5  # Türkçe eklemeli: kaba kök için ilk 5 harf
 
 @dataclass
 class ClusterResult:
-    labels: np.ndarray  # her öğe için küme no; -1 = aykırı
+    labels: np.ndarray  # her öğe için küme no; -1 = hiçbir iş alanına girmedi (HDBSCAN gürültüsü)
     names: dict[int, str]  # küme no -> okunur ad
+    outliers: np.ndarray  # gerçekten alışılmadık: en yakın komşusu bile çok uzak (robust z-skor)
 
 
 def _tokens(text: str) -> list[str]:
@@ -90,12 +91,15 @@ def nn_outliers(vecs: np.ndarray, z: float = 3.0) -> np.ndarray:
 def cluster(texts: list[str], vecs: np.ndarray, min_cluster_size: int = 2) -> ClusterResult:
     n = len(texts)
     if n < max(4, min_cluster_size * 2):
-        return ClusterResult(np.full(n, -1), {})
+        return ClusterResult(np.full(n, -1), {}, np.zeros(n, dtype=bool))
     # min_samples = min_cluster_size: yalnız kalan noktalar kümeye zorla katılmaz, aykırı kalır
     model = HDBSCAN(min_cluster_size=max(2, min_cluster_size), metric="euclidean")
     # Vektörler L2-normalize: öklid mesafesi kosinüs benzerliğiyle aynı sıralamayı verir.
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", FutureWarning)
         labels = model.fit_predict(vecs)
-    labels = np.where(nn_outliers(vecs), -1, labels)
-    return ClusterResult(labels, name_clusters(texts, labels))
+    # İki ayrı kavram: HDBSCAN gürültüsü (-1) "belirgin bir iş alanına girmedi" demek;
+    # "alışılmadık" ise benzeri hiç olmayan öğe. Ikincisi yalnızca komşu benzerliğinden gelir.
+    outliers = nn_outliers(vecs)
+    labels = np.where(outliers, -1, labels)
+    return ClusterResult(labels, name_clusters(texts, labels), outliers)

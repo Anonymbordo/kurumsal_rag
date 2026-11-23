@@ -74,9 +74,10 @@ def extract_for_document(db: Session, doc: Document) -> list[Task]:
         confidence, reasons = s.confidence, list(s.reasons)
 
         workstream, outlier = None, False
-        if clusters is not None and len(clusters.labels) == len(all_texts) and clusters.names:
-            lab = int(clusters.labels[len(hist_texts) + i])
-            outlier = lab < 0
+        if clusters is not None and len(clusters.labels) == len(all_texts):
+            j = len(hist_texts) + i
+            lab = int(clusters.labels[j])
+            outlier = bool(clusters.outliers[j])
             workstream = clusters.names.get(lab)
             if outlier:
                 confidence = max(1, confidence - 1)

@@ -32,11 +32,12 @@ def test_hdbscan_groups_similar_and_flags_outlier():
     assert labels[0] == labels[1] == labels[2] != -1
     assert labels[3] == labels[4] == labels[5] != -1
     assert labels[0] != labels[3]
-    assert labels[6] == -1  # alışılmadık görev
+    assert labels[6] == -1 and res.outliers[6]  # alışılmadık görev
+    assert not res.outliers[:6].any()
     assert all(res.names.get(l) for l in set(labels) if l != -1)
 
 
 def test_too_few_items_are_not_clustered():
     texts = ["a görev", "b görev"]
     res = cluster(texts, HashingEmbedder().encode(texts))
-    assert list(res.labels) == [-1, -1] and res.names == {}
+    assert list(res.labels) == [-1, -1] and res.names == {} and not res.outliers.any()
