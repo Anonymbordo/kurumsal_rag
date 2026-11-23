@@ -33,6 +33,15 @@ class Settings(BaseSettings):
     show_workstreams: bool = False
     llm_model_label: str = "Yerel model (mock)"
 
+    # Decoder (üretken model): sohbette serbest sorular ve "görevimi açıkla".
+    # none -> şablon cevaplar; ollama -> yerel Ollama sunucusu (CPU, 4-bit)
+    decoder: str = "none"
+    decoder_url: str = "http://localhost:11434"
+    decoder_model: str = "qwen2.5:3b"
+    decoder_timeout: float = 120.0
+    decoder_logprobs: bool = True  # token olasılıklarını iste (destekleyen Ollama sürümlerinde)
+    rag_top_k: int = 6  # decoder'a verilecek en fazla kayıt
+
     # Sprint kapasitesi (kişi başı iş günü) — yük yüzdesi bunun üzerinden hesaplanır.
     sprint_capacity_days: float = 10.0
 

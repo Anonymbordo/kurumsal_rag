@@ -72,6 +72,21 @@ python scripts/evaluate.py --verbose      # mock ile encoder'ı karşılaştır
 
 Model seçimi: `GA_EMBED_MODEL` ile değişir. `gte-small` gibi modeller ağırlıklı İngilizce eğitildiği için Türkçede çok dilli modellerle (ör. `intfloat/multilingual-e5-small`, `-base`) karşılaştırılmalı; `scripts/evaluate.py` bunun için. Değerlendirme seti şu an küçük ve örnek dokümanlardan oluşuyor; gerçek dokümanlar ve etiketler eklendikçe anlamlılaşır.
 
+## Decoder (sohbet, isteğe bağlı)
+
+Görev tespiti ve kişi önerisi encoder'da kalır. Decoder yalnızca sohbette çalışır:
+"görevimi açıkla" ve kayıtlara dayanan serbest sorular.
+
+```
+soru ─► e5 (encoder): kullanıcının görevleri + paylaşılan doküman cümleleri arasından en ilgili kayıtlar
+     ─► istem: [K1] … [K6] kayıtları + "yalnızca bunları kullan, kaynak göster" kuralı
+     ─► yerel LLM (decoder, Ollama, CPU 4-bit): nedensel maskeli öz-dikkat → LM head → logit → softmax
+     ─► cevap + kaynak etiketleri + ortalama token olasılığı
+```
+
+Kurulum: [Ollama](https://ollama.com) yükleyin, `ollama pull qwen2.5:3b`, `.env` içinde `GA_DECODER=ollama`.
+Ollama kapalıysa uygulama şablon cevaplarla çalışmaya devam eder.
+
 ## Modeli iyileştirme
 
 Veri toplama, etiketleme ve aktif öğrenme döngüsü: [`docs/VERI_TOPLAMA.md`](docs/VERI_TOPLAMA.md)

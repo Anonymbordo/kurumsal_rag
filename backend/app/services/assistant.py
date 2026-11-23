@@ -2,7 +2,8 @@
 
 Görev, paylaşılan doküman ve teslim tarihi soruları doğrudan veritabanından,
 yapılandırılmış kartlarla yanıtlanır (uydurma riski yok, her yanıt kaynaklı).
-Bunların dışındaki serbest sorular LLM sağlayıcısına gider.
+"Görevimi açıkla" ve serbest sorular, decoder bağlıysa RAG ile (services/rag.py),
+değilse kayıtlardan derlenen şablon cevapla yanıtlanır.
 """
 import re
 from dataclasses import dataclass, field
@@ -12,6 +13,8 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from ..llm import ChatTurn, get_provider
+from ..llm.decoder import get_decoder
+from . import rag
 from ..models import Document, Message, Task, User
 from .load import load_pct
 from ..timeutil import utcnow
@@ -87,6 +90,12 @@ def answer(db: Session, me: User, text: str, history: list[Message]) -> Reply:
     wants_due = "teslim" in q or "bu hafta" in q
     key_match = TASK_KEY.search(text)
     wants_why = "neden" in q and key_match is not None
+    wants_explain = any(w in q for w in ("açıkla", "anlat", "detay", "ne yapmam", "nasıl yap", "ne demek", "ne istiyor")) and (
+        "görev" in q or key_match is not None
+    )
+
+    if wants_explain:
+        return _explain(db, me, text, history, key_match.group(1).upper() if key_match else None, users)
 
     if wants_why:
         key = key_match.group(1).upper()
@@ -152,5 +161,52 @@ def answer(db: Session, me: User, text: str, history: list[Message]) -> Reply:
     if parts:
         return Reply(text="\n\n".join(parts), blocks=blocks, sources=sources)
 
+    decoder = get_decoder()
+    if decoder is not None:
+        records = rag.retrieve(db, me, text, _my_active_tasks(db, me), users)
+        answer_text, srcs = rag.generate(decoder, text, records, history)
+        return Reply(text=answer_text, sources=srcs)
     turns = [ChatTurn(m.role, m.text) for m in history] + [ChatTurn("user", text)]
     return Reply(text=get_provider().chat(turns, context=""), sources=[])
+
+
+def _explain(db: Session, me: User, text: str, history: list[Message], key: str | None, users: dict[str, User]) -> Reply:
+    """Görevin tam cümlesi, dokümandaki bağlamı ve gerekçeleri; decoder varsa doğal dilde açıklama."""
+    mine = _my_active_tasks(db, me)
+    if key:
+        t = db.scalar(select(Task).where(Task.key == key))
+        if t is None or t.assignee_id != me.id:
+            return Reply(text=f"{key} anahtarlı, sana atanmış bir görev bulamadım.")
+    elif not mine:
+        return Reply(text="Şu an sana atanmış aktif bir görev yok.")
+    else:
+        t = max(mine, key=lambda x: x.assigned_at or datetime.min)  # en son atanan
+    card = {"type": "tasks", "items": [_task_card(db, t, users, me)]}
+    others = [x for x in mine if x.id != t.id]
+    hint = (
+        f"\n\nÜzerinde {len(others)} görev daha var; başka birini açıklamamı istersen anahtarını yaz "
+        f"(ör. {others[0].key})." if others and not key else ""
+    )
+
+    decoder = get_decoder()
+    if decoder is not None:
+        records = [rag.task_record(db, t, users)] + [
+            r for r in rag.retrieve(db, me, t.source_quote or t.title, [], users) if r.text != t.source_quote
+        ][:3]
+        q = f"{t.key} görevini açıkla: ne yapmam gerekiyor, neden bana verildi, teslim ne zaman? {text}"
+        answer_text, srcs = rag.generate(decoder, q, records, history)
+        return Reply(text=answer_text + hint, blocks=[card], sources=srcs)
+
+    doc = db.get(Document, t.document_id) if t.document_id else None
+    before, after = rag.doc_context(doc, t.source_start, t.source_end)
+    parts = [f"**{t.key}** · {t.source_quote or t.title}"]
+    if before or after:
+        parts.append("**Dokümandaki bağlam:** " + " … ".join(x for x in (before, "**[bu görev]**", after) if x))
+    if t.reasons:
+        parts.append("**Neden sana verildi:** " + "; ".join(t.reasons) + ".")
+    parts.append(f"**Teslim:** {tr_date(t.due_date)} · tahmini {t.est_days:g} iş günü.")
+    return Reply(
+        text="\n\n".join(parts) + hint,
+        blocks=[card],
+        sources=[f"{t.key} · {doc.title} {t.source_ref}" if doc else f"Görev {t.key}"],
+    )
