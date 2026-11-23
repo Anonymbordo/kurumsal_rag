@@ -23,11 +23,18 @@ class Sentence:
     end: int
 
 
+def _is_title_line(line: str) -> bool:
+    t = line.strip()
+    return not SECTION.search(t) and not re.search(r"[.!?:;]$", t) and len(t.split()) <= 12
+
+
 def split_sentences(document_text: str, min_len: int = 15) -> list[Sentence]:
     """Dokümanı paragraflara ve cümlelere böler; her cümlenin dokümandaki yerini korur.
 
     - "v3.2" gibi sayı içindeki noktalar cümle sonu sayılmaz.
     - "§2 Limit kontrolü." gibi bölüm başlıkları cümle sayılmaz.
+    - Noktalama ile bitmeyen kısa satırlar (doküman başlığı vb.) cümle sayılmaz.
+    - Noktalı virgül cümleyi bölmez: "uygulama çöküyor; hata kaydı ektedir" tek cümledir.
     """
     out: list[Sentence] = []
     offset = 0
@@ -40,8 +47,10 @@ def split_sentences(document_text: str, min_len: int = 15) -> list[Sentence]:
         para_no += 1
         m = SECTION.search(para)
         ref = f"§{m.group(1)}" if m else f"¶{para_no}"
+        if _is_title_line(para):
+            continue
         pos = 0
-        for raw in re.split(r"(?<=[.!?;])\s+", para):
+        for raw in re.split(r"(?<=[.!?])\s+", para):
             idx = para.find(raw, pos)
             pos = idx + len(raw) if idx >= 0 else pos
             raw = raw.strip()
