@@ -79,3 +79,12 @@ def test_team_load_and_stats(client):
     assert can["after"] >= 90
     acc = client.get("/api/stats/accuracy", headers=LEAD).json()
     assert [a["level"] for a in acc] == [3, 2, 1]
+
+
+def test_reextract_does_not_duplicate_decided(client):
+    before = client.get("/api/documents/1/tasks", headers=LEAD).json()
+    decided = [t for t in before if t["status"] != "suggested"]
+    after = client.post("/api/documents/1/extract", headers=LEAD).json()
+    spans = [(t["source"]["start"], t["source"]["end"]) for t in after]
+    assert len(spans) == len(set(spans))  # aynı cümle iki kez yok
+    assert len([t for t in after if t["status"] != "suggested"]) == len(decided)

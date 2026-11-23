@@ -42,8 +42,13 @@ def extract_for_document(db: Session, doc: Document) -> list[Task]:
     provider = get_provider()
     extracted = provider.extract_tasks(doc.text, doc.doc_type)
 
-    # Aynı doküman yeniden işlenirse karara bağlanmamış eski öneriler silinir.
+    # Aynı doküman yeniden işlenirse: karara bağlanmamış eski öneriler silinir,
+    # karar verilmiş (onaylanan/reddedilen/aktarılan) cümleler tekrar önerilmez.
     db.execute(delete(Task).where(Task.document_id == doc.id, Task.status == "suggested"))
+    decided = db.scalars(select(Task).where(Task.document_id == doc.id)).all()
+    taken = {(t.source_start, t.source_end) for t in decided}
+    extracted = [ex for ex in extracted if (ex.source_start, ex.source_end) not in taken]
+    next_no = max((t.order_no for t in decided), default=0)
 
     embedder, semantic_ok = _embedder_for(provider)
     history = [
@@ -86,7 +91,7 @@ def extract_for_document(db: Session, doc: Document) -> list[Task]:
         t = Task(
             document_id=doc.id,
             team_id=doc.team_id,
-            order_no=i + 1,
+            order_no=next_no + i + 1,
             title=ex.title,
             detail=ex.detail,
             tags=ex.tags,
