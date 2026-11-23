@@ -23,9 +23,17 @@ class Sentence:
     end: int
 
 
-def _is_title_line(line: str) -> bool:
+BULLET = re.compile(r"^\s*(?:[-–•*]|\d+[.)])\s+")
+
+
+def _is_title_line(line: str, first: bool) -> bool:
+    """Doküman başlığı (ilk satır, noktalamasız ve kısa) ya da liste başlığı ("Gündem:")."""
     t = line.strip()
-    return not SECTION.search(t) and not re.search(r"[.!?:;]$", t) and len(t.split()) <= 12
+    if SECTION.search(t) or BULLET.match(t):
+        return False
+    if first and not re.search(r"[.!?]$", t) and len(t.split()) <= 12:
+        return True
+    return t.endswith(":") and len(t.split()) <= 8
 
 
 def split_sentences(document_text: str, min_len: int = 15) -> list[Sentence]:
@@ -33,7 +41,8 @@ def split_sentences(document_text: str, min_len: int = 15) -> list[Sentence]:
 
     - "v3.2" gibi sayı içindeki noktalar cümle sonu sayılmaz.
     - "§2 Limit kontrolü." gibi bölüm başlıkları cümle sayılmaz.
-    - Noktalama ile bitmeyen kısa satırlar (doküman başlığı vb.) cümle sayılmaz.
+    - Doküman başlığı (ilk kısa satır) ve "Gündem:" gibi liste başlıkları cümle sayılmaz.
+    - Madde işaretleri ("- ", "• ", "1) ") cümleden ayıklanır.
     - Noktalı virgül cümleyi bölmez: "uygulama çöküyor; hata kaydı ektedir" tek cümledir.
     """
     out: list[Sentence] = []
@@ -47,13 +56,13 @@ def split_sentences(document_text: str, min_len: int = 15) -> list[Sentence]:
         para_no += 1
         m = SECTION.search(para)
         ref = f"§{m.group(1)}" if m else f"¶{para_no}"
-        if _is_title_line(para):
+        if _is_title_line(para, first=para_no == 1):
             continue
         pos = 0
         for raw in re.split(r"(?<=[.!?])\s+", para):
             idx = para.find(raw, pos)
             pos = idx + len(raw) if idx >= 0 else pos
-            raw = raw.strip()
+            raw = BULLET.sub("", raw.strip())
             is_heading = raw.startswith("§") and len(SECTION.sub("", raw).split()) <= 3
             clean = SECTION.sub("", raw).strip()
             if is_heading or len(clean) < min_len:

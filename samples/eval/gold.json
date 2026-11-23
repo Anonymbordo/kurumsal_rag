@@ -1,0 +1,9 @@
+{
+  "_aciklama": "Her dosya için GÖREV olan cümlelerden ayırt edici bir parça. Listede olmayan her cümle görev değildir. Etiketler elle verildi; tartışmalı cümleler bilerek eklendi (tuzaklar).",
+  "a_haftalik_toplanti.txt": ["Face ID meselesi", "loglara bir göz atsın", "bir el atılsa", "regresyonu bitirecek"],
+  "b_eposta.txt": ["ölçekleme planını", "zaman aşımı ayarlarını", "yük testi senaryolarını"],
+  "c_sartname.txt": ["iki faktörlü doğrulamayı", "en fazla 15 dakika", "denetim kaydına yazılacaktır", "sızma testi raporu"],
+  "d_durum_raporu.txt": ["henüz test edilmemiş"],
+  "e_mimari_kurul.txt": ["karşılaştıran kısa bir not", "müşteri ekibiyle konuşulmalı", "geri alma betikleri"],
+  "f_daily.txt": ["Can bakacak", "gönüllü lazım", "ticket açılmalı"]
+}

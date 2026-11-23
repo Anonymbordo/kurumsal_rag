@@ -1,0 +1,7 @@
+Daily notları
+Dün Ayşe limit API PR'ını açtı.
+Mert bugün iOS crash fix üzerinde çalışıyor.
+Blocker: staging'deki deploy pipeline kırık, Can bakacak.
+PR review için bir gönüllü lazım.
+Selin'in test ortamı erişimi hâlâ açılmadı, IT'ye ticket açılmalı.
+Öğle yemeğinden sonra demo var.

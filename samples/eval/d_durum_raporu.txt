@@ -1,0 +1,8 @@
+Sprint 15 Durum Raporu
+Hesap hareketleri API'sinin sayfalama desteği tamamlandı ve canlıya alındı.
+Android bildirim hatası Mert tarafından düzeltildi.
+Yük testi sonuçları beklenenin üzerinde çıktı.
+Ekip olarak bu tempoyu korumamız gerekiyor.
+Bu sprintte hiçbir kritik hata canlıya çıkmadı.
+Tek açık konu, oturum yenileme akışının iOS tarafında henüz test edilmemiş olması.
+Önümüzdeki sprintte ekibe bir QA mühendisi katılacak.

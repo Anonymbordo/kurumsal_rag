@@ -1,0 +1,7 @@
+Mimari Kurul Notları
+Limit servisinin tek servise taşınması yaklaşımı onaylandı.
+Mesaj kuyruğu seçimi henüz netleşmedi, Elif iki seçeneği karşılaştıran kısa bir not yazacak.
+Eski uç noktanın kapatılma tarihi müşteri ekibiyle konuşulmalı.
+Kurul, performans hedeflerinin makul olduğunu düşünüyor.
+Şema değişiklikleri için geri alma betikleri de hazırlansın.
+Bir sonraki kurul toplantısı ocak ayında yapılacak.

@@ -1,0 +1,10 @@
+Haftalık Ödeme Ekibi Toplantısı
+Katılımcılar: Burak, Ayşe, Mert, Selin, Can, Elif
+- Kart saklama ekranı yeni tasarımla canlıda.
+- Face ID meselesi → Mert
+- Elif loglara bir göz atsın, maskeleme eksik olabilir
+- API tarafı hâlâ yavaş, bir el atılsa fena olmaz
+- Geçen haftaki kesinti müşterileri pek etkilemedi
+- Selin cuma gününe kadar regresyonu bitirecek
+- Herkesin kod incelemelerinde daha dikkatli olması gerekir
+- Bir sonraki toplantı salı sabah onda

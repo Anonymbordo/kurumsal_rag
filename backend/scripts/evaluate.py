@@ -17,37 +17,54 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 ROOT = Path(__file__).resolve().parents[2]
 
-# (doküman, [görev cümlelerinden ayırt edici parça, ...])
-GOLD: list[tuple[str, list[str]]] = []
+# küme adı -> [(doküman adı, metin, [görev cümlelerinden ayırt edici parça, ...])]
+SETS: dict[str, list[tuple[str, str, list[str]]]] = {}
 
 
 def _load_gold():
+    import json
+
+    GOLD: list = []
+    SETS["kolay (örnek notlar)"] = GOLD
     from app.seed import SPRINT_NOTE
 
     GOLD.append(
         (
+            "sprint14",
             SPRINT_NOTE,
             ["tek bir servise taşınmalı", "Face ID", "regresyon testinden", "maskelenmeli", "ölçekleme kuralı eklenmeli", "bilgilendirme metni"],
         )
     )
     s15 = (ROOT / "samples" / "sprint15-planlama.txt").read_text(encoding="utf-8")
-    GOLD.append((s15, ["sayfalama", "çöküyor", "15 dakikaya", "yük testi", "devreye alınmalı"]))
+    GOLD.append(("sprint15", s15, ["sayfalama", "çöküyor", "15 dakikaya", "yük testi", "devreye alınmalı"]))
+
+    hard = []
+    gold = json.loads((ROOT / "samples" / "eval" / "gold.json").read_text(encoding="utf-8"))
+    for name, positives in gold.items():
+        if name.startswith("_"):
+            continue
+        hard.append((name, (ROOT / "samples" / "eval" / name).read_text(encoding="utf-8"), positives))
+    SETS["zor (gerçekçi yazım)"] = hard
 
 
-def evaluate(provider, verbose=False):
+def evaluate(provider, docs, verbose=False):
     from app.llm.text import split_sentences
 
     tp = fp = fn = 0
-    for text, positives in GOLD:
+    for name, text, positives in docs:
         found = {t.source_quote for t in provider.extract_tasks(text, "meeting")}
-        for s in split_sentences(text):
+        sents = split_sentences(text)
+        missing = [p for p in positives if not any(p in s.text for s in sents)]
+        if missing:
+            print(f"   UYARI {name}: altın etiket cümlelerde bulunamadı: {missing}")
+        for s in sents:
             gold = any(p in s.text for p in positives)
             pred = s.text in found
             tp += gold and pred
             fp += (not gold) and pred
             fn += gold and not pred
             if verbose and gold != pred:
-                print(f"   {'KAÇIRDI ' if gold else 'FAZLADAN'} | {s.text[:90]}")
+                print(f"   {'KAÇIRDI ' if gold else 'FAZLADAN'} | {name:<24} | {s.text[:80]}")
     p = tp / (tp + fp) if tp + fp else 0.0
     r = tp / (tp + fn) if tp + fn else 0.0
     f1 = 2 * p * r / (p + r) if p + r else 0.0
@@ -66,16 +83,22 @@ def main():
     from app.llm.encoder import EncoderProvider
     from app.llm.mock import MockProvider
 
-    print(f"{'sağlayıcı':<40} kesinlik  duyarlılık  F1")
+    provs = []
     for name, factory in (("mock (kural tabanlı)", MockProvider), ("encoder", EncoderProvider)):
         t0 = time.perf_counter()
         prov = factory()
-        load = time.perf_counter() - t0
-        t0 = time.perf_counter()
-        p, r, f1 = evaluate(prov, a.verbose)
-        dt = time.perf_counter() - t0
         label = name if name.startswith("mock") else f"encoder ({prov.embedder.name})"
-        print(f"{label:<40} {p:8.2f}  {r:10.2f}  {f1:4.2f}   yükleme {load:.1f}s, çıkarım {dt*1000:.0f}ms")
+        provs.append((label, prov, time.perf_counter() - t0))
+
+    for set_name, docs in SETS.items():
+        n = sum(len(d[2]) for d in docs)
+        print(f"\n== {set_name}: {len(docs)} doküman, {n} görev")
+        print(f"{'sağlayıcı':<44} kesinlik  duyarlılık  F1")
+        for label, prov, load in provs:
+            t0 = time.perf_counter()
+            p, r, f1 = evaluate(prov, docs, a.verbose)
+            dt = time.perf_counter() - t0
+            print(f"{label:<44} {p:8.2f}  {r:10.2f}  {f1:4.2f}   çıkarım {dt*1000:.0f}ms (yükleme {load:.1f}s)")
 
 
 if __name__ == "__main__":

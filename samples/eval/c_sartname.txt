@@ -1,0 +1,8 @@
+Teknik Şartname — Mobil Bankacılık Kimlik Doğrulama Modülü
+Madde 1. Bu şartname, kimlik doğrulama modülünün kapsamını tanımlar.
+Madde 2. Yüklenici, iki faktörlü doğrulamayı SMS ve uygulama içi bildirimle sağlayacaktır.
+Madde 3. Oturum belirteçlerinin geçerlilik süresi en fazla 15 dakika olacaktır.
+Madde 4. Tüm kimlik doğrulama denemeleri denetim kaydına yazılacaktır.
+Madde 5. Mevcut kullanıcı veritabanının taşınması bu kapsamın dışındadır.
+Madde 6. Teslimattan önce bağımsız bir sızma testi raporu sunulacaktır.
+Madde 7. Bu şartnamede geçen kullanıcı ifadesi bireysel müşterileri kapsar.
