@@ -2,21 +2,26 @@
 
 Önceden eğitilmiş, dondurulmuş bir cümle-embedding modeli kullanır:
   1. Doküman cümlelere bölünür, her cümlenin vektörü çıkarılır.
-  2. Görev mi? -> örnek görev / görev olmayan cümlelere benzerlik farkı (prototip sınıflandırma).
+  2. Görev mi? İki sinyal birleşir:
+     a) Kip yönü: konu aynı/kip farklı cümle çiftlerinden "yapılacak ↔ yapıldı" yönü
+        (ortalama farkı) çıkarılır; cümlenin bu yöndeki standartlaştırılmış izdüşümü.
+     b) Prototip benzerliği: en yakın görev / görev olmayan örneklere benzerlik farkı.
   3. Alan etiketi -> etiket açıklamalarına benzerlik.
 Metin üretimi yapılmaz; başlık cümleden türetilir. Kısa başlık üretimi sonraki aşamadır.
 """
 import numpy as np
 
 from ..ml.embedder import Embedder, get_embedder
-from ..ml.prototypes import NON_TASK_EXAMPLES, TAG_DESCRIPTIONS, TASK_EXAMPLES
+from ..ml.prototypes import MODALITY_PAIRS, NON_TASK_EXAMPLES, TAG_DESCRIPTIONS, TASK_EXAMPLES
 from .base import ChatTurn, ExtractedTask
 from .mock import MockProvider
 from .text import OBLIGATION, estimate_days, split_sentences, title_from
 
 TOP_K = 3
-SHARPNESS = 20.0  # benzerlik farkını olasılığa çeviren eğim
-RULE_PRIOR = 0.04  # yükümlülük kipi ("-meli") varsa küçük bir öncül katkı
+SHARPNESS = 20.0  # benzerlik farkını logit ölçeğine çeviren eğim
+RULE_PRIOR = 0.04  # yükümlülük kipi ("-meli") varsa küçük bir öncül katkı (benzerlik ölçeğinde)
+W_DIRECTION = 1.0  # kip yönü skorunun (z) logit'e katkısı
+W_PROTOTYPE = 0.5  # prototip benzerliğinin logit'e katkısı
 THRESHOLD = 0.5
 
 
@@ -30,8 +35,17 @@ class EncoderProvider:
 
     def __init__(self, embedder: Embedder | None = None):
         self.embedder = embedder or get_embedder()
-        self._pos = self.embedder.encode(TASK_EXAMPLES)
-        self._neg = self.embedder.encode(NON_TASK_EXAMPLES)
+        pair_task = self.embedder.encode([a for a, _ in MODALITY_PAIRS])
+        pair_stat = self.embedder.encode([b for _, b in MODALITY_PAIRS])
+        self._pos = np.vstack([self.embedder.encode(TASK_EXAMPLES), pair_task])
+        self._neg = np.vstack([self.embedder.encode(NON_TASK_EXAMPLES), pair_stat])
+
+        # Kip yönü (difference of means) ve ölçeği
+        d = pair_task.mean(axis=0) - pair_stat.mean(axis=0)
+        self._dir = d / (np.linalg.norm(d) or 1.0)
+        pt, ps = pair_task @ self._dir, pair_stat @ self._dir
+        self._mid = float((pt.mean() + ps.mean()) / 2)
+        self._scale = float((pt.std() + ps.std()) / 2) or 1e-6
         self._tag_names = list(TAG_DESCRIPTIONS)
         cents = []
         for tag in self._tag_names:
@@ -45,7 +59,9 @@ class EncoderProvider:
         e = self.embedder.encode(sentences)
         margin = _topk_mean(e @ self._pos.T, TOP_K) - _topk_mean(e @ self._neg.T, TOP_K)
         prior = np.array([RULE_PRIOR if OBLIGATION.search(s) else 0.0 for s in sentences])
-        return 1.0 / (1.0 + np.exp(-SHARPNESS * (margin + prior)))
+        z = (e @ self._dir - self._mid) / self._scale  # kip yönündeki konum, standart sapma biriminde
+        logit = W_DIRECTION * z + W_PROTOTYPE * SHARPNESS * margin + SHARPNESS * prior
+        return 1.0 / (1.0 + np.exp(-logit))
 
     def tags_for(self, vecs: np.ndarray) -> list[list[str]]:
         out = []
