@@ -36,10 +36,16 @@ class ClusterResult:
     outliers: np.ndarray  # gerçekten alışılmadık: en yakın komşusu bile çok uzak (robust z-skor)
 
 
+def _tr_lower(word: str) -> str:
+    # "API", "SSL" gibi kısaltmalar İngilizce küçültülür ("apı" olmasın); diğerleri Türkçe kurala göre.
+    if word.isupper() and len(word) > 1:
+        return word.lower()
+    return word.replace("I", "ı").replace("İ", "i").lower()
+
+
 def _tokens(text: str) -> list[str]:
-    t = text.replace("I", "ı").replace("İ", "i").lower()
     out = []
-    for w in WORD.findall(t):
+    for w in (_tr_lower(x) for x in WORD.findall(text)):
         if len(w) < 3 or w in STOPWORDS or w.isdigit():
             continue
         if re.search(r"(meli|malı|melidir|malıdır)$", w):  # yükümlülük fiilleri ad taşımaz
