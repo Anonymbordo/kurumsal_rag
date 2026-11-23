@@ -109,10 +109,33 @@ def prf(y, pred, beta=2.0):
     return p, r, f1, fb
 
 
+class _Tee:
+    def __init__(self, *streams):
+        self.streams = streams
+
+    def write(self, s):
+        for st in self.streams:
+            st.write(s)
+
+    def flush(self):
+        for st in self.streams:
+            st.flush()
+
+
+def _setup_output(out: str | None) -> None:
+    # Windows konsolu (cp1254) "→", "−" gibi karakterlerde çöker: çıktıyı UTF-8'e zorla.
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    if out:
+        sys.stdout = _Tee(sys.stdout, open(out, "w", encoding="utf-8"))
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--model", default=None, help="GA_EMBED_MODEL değeri")
+    ap.add_argument("--out", default=None, help="çıktıyı UTF-8 olarak bu dosyaya da yaz")
     a = ap.parse_args()
+    _setup_output(a.out)
     if a.model:
         os.environ["GA_EMBED_MODEL"] = a.model
 
