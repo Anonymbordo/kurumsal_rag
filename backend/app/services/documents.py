@@ -36,15 +36,21 @@ def reflow(text: str) -> str:
     başlık değilse iki satır tek paragrafta birleştirilir.
     """
     lines = [l.rstrip() for l in text.replace("\r", "").split("\n")]
+    # Görsel kırılım yalnızca satır neredeyse tam genişlikteyken olur; kısa satırlar
+    # (başlık, "Katılımcılar: ..." gibi) kendi başına kalır.
+    full = max((len(l) for l in lines), default=0) * 0.6
     out: list[str] = []
+    wrapped = False  # out[-1] tam genişlikte bir satırla mı bitti
     for line in lines:
         if not line.strip():
             if out and out[-1] != "":
                 out.append("")
+            wrapped = False
             continue
-        if out and out[-1] and not re.search(r"[.!?:]$", out[-1]) and not _NEW_BLOCK.match(line):
+        if out and out[-1] and wrapped and not re.search(r"[.!?:]$", out[-1]) and not _NEW_BLOCK.match(line):
             prev = out[-1]
             out[-1] = prev[:-1] + line.lstrip() if prev.endswith("-") else prev + " " + line.strip()
         else:
             out.append(line.strip())
+        wrapped = len(line) >= full
     return "\n".join(l for l in out if l != "")
