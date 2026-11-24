@@ -1,20 +1,85 @@
 # Görevlendirme Asistanı
 
-Kurum içinde çalışan (on-prem) bir görevlendirme asistanı. Takım lideri bir toplantı notu, analiz dokümanı ya da şartname yükler; sistem görevleri çıkarır, her biri için kişi önerir, lider onaylar. Personel de sohbet ekranından "bugün bana ne verildi?", "benimle ne paylaşıldı?" gibi sorular sorar.
+**Kurum içinde (on-prem) çalışan, dokümandan ve toplantıdan görev çıkaran, kişi öneren ve liderin onayıyla dağıtan asistan.**
 
-**Veri kurum dışına çıkmaz:** model, veritabanı ve arayüz kurumun kendi sunucusunda çalışır; dış API çağrısı yoktur.
+## Problem
 
-> Durum: v0.2 — arayüz, API, öneri ve onay akışı çalışıyor. Görev çıkarma için iki sağlayıcı var: kural tabanlı `mock` ve eğitimsiz `encoder` (embedding + HDBSCAN). Metin üreten model (kısa başlık, sohbet) sonraki aşama.
+Kurumlar toplantı notlarını, şartnameleri ve e-postaları ChatGPT gibi kapalı modellere API ile gönderemiyor: veri kurum dışına çıkar. Sonuç olarak "kim neyi yapacak" işi hâlâ elle yapılıyor, toplantıda söylenen işler kayboluyor, personel "bana ne verildi?" sorusunu e-posta arşivinde arıyor.
+
+## Ne yapıyor
+
+| Kim | Ne |
+|---|---|
+| **Takım lideri** | Doküman yükler ya da toplantıyı portalda yapar → sistem görev cümlelerini bulur, her biri için kişi önerir ve **nedenini** gösterir → lider onaylar, değiştirir ya da reddeder. |
+| **Personel** | Sohbetten "bugün bana ne verildi?", "benimle ne paylaşıldı?" diye sorar; görevini dokümandaki cümlesiyle birlikte görür. |
+| **Toplantı** | Herkes kendi mikrofonunu kaydeder (konuşmacı kesin) → CPU'da Türkçe döküm → rapor → "ben bakarım" diyen kişiye görev önerisi. |
+
+Hiçbir aşamada dış API yok: modeller, veritabanı ve arayüz kurumun sunucusunda, **GPU'suz** çalışır.
+
+## Mimari
+
+```mermaid
+flowchart LR
+    D[Doküman / toplantı sesi] --> W[faster-whisper<br/>CPU, int8]
+    D --> S[Cümlelere ayırma<br/>PDF düzeltme]
+    W --> S
+    S --> E[e5-small encoder<br/>donmuş, 384 boyut]
+    E --> P[Lineer probe<br/>+ Türkçe kip özellikleri]
+    P -->|görev / aday| A[Kişi önerisi<br/>uzmanlık · geçmiş iş · yük · adı geçen · konuşan]
+    E --> H[HDBSCAN<br/>iş alanı + aykırı]
+    H --> A
+    A --> L{Lider onayı}
+    L --> J[(İş takibi)]
+    L -.ret nedeni.-> P
+    J --> C[Sohbet / görev sayfası]
+    E -->|ilgili kayıtlar| R[RAG]
+    R --> Q[Yerel LLM decoder<br/>qwen2.5:3b, Ollama]
+    Q -->|kaynaklı cevap, rapor| C
+```
+
+**Tasarım ilkeleri**
+- **Anlama encoder'da, üretme decoder'da.** Görev tespiti ve kişi önerisi hızlı, ölçülebilir ve açıklanabilir bir encoder + sınıflandırıcıda. Decoder yalnızca seçilmiş kayıtlara bakarak cevap ve rapor yazar; dayanağı zayıf satırlar işaretlenir.
+- **Öneri + onay, otomatik atama yok.** Düşük güvende lider önce kendi seçimini yapar (bilişsel zorlama); her karar modeli besler (aktif öğrenme).
+- **Her çıktı kaynağına bağlı.** Görev, rapor satırı ve sohbet cevabı dokümandaki cümleye ya da döküm satırına götürür.
+
+## Sonuçlar
+
+| Ölçüm | Değer | Not |
+|---|---|---|
+| Görev tespiti, kör test seti | _ölçülüyor_ | Etiketleyen kişi model çıktısını görmeden etiketler; eğitim/ayar sırasında hiç kullanılmaz. |
+| Görev tespiti, zor doğrulama seti | F1 0.79 (eğitimsiz prototip) | Kural tabanlı başlangıç: 0.16 |
+| Kişi önerisi, tespit edilen görevlerde | 6/6 | Küçük örnek |
+| Yanıt süresi (CPU) | _ölçülecek_ | Her sohbet cevabının altında istem/üretim süresi gösteriliyor |
+
+## Bilinen sınırlar
+
+- Toplantı dökümünün kalitesi mikrofona ve whisper model boyutuna bağlı; `small` Türkçe teknik konuşmada zayıf, `medium` önerilir.
+- 3B'lik decoder boşluk doldurmaya eğilimli; bu yüzden rapor satırları dökümle karşılaştırılıp işaretleniyor, görev listesi decoder'dan değil encoder hattından geliyor.
+- Tablolu ve taranmış PDF'ler henüz iyi okunmuyor.
+- Eğitim verisi yazılı metin ağırlıklı; konuşma dili için kurum dökümleri etiketlendikçe iyileşir.
+- Kimlik doğrulama geliştirme modunda (başlıkla kullanıcı seçimi); kurulumda LDAP/SSO'ya bağlanacak şekilde ayrıldı.
+
+## Demo
+
+```bash
+cd backend
+python scripts/demo_data.py     # temiz demo verisi (mevcut veritabanı yedeklenir)
+uvicorn app.main:app --port 8000
+```
+Canlı demoda yapıştırılacak not: `samples/demo/canli_demo_notu.txt`. Demo verisindeki lider kararları kurgusaldır; panodaki "öneri isabeti" model başarısı olarak sunulmamalıdır.
 
 ## Ekranlar
 
 | Ekran | Yol | Kimin için |
 |---|---|---|
-| Ana ekran (sohbet) | `/` | Herkes |
-| Sohbet | `/c/:id` | Herkes |
-| Doküman yükle | `/yukle` | Takım lideri |
-| Görevleri incele ve onayla | `/dokuman/:id` | Lider karar verir, personel okur |
-| Ekip yükü ve model isabeti | `/ekip` | Takım lideri |
+| Ana ekran / sohbet | `/`, `/c/:id` | Herkes |
+| Görev sayfası (kaynak cümlesiyle) | `/gorev/:id` | Görevin sahibi, lider |
+| Toplantılar, toplantı odası ve rapor | `/toplantilar`, `/toplanti/:id` | Katılımcılar |
+| Ekip panosu | `/pano` | Takım lideri |
+| Doküman yükle, görevleri incele ve onayla | `/yukle`, `/dokuman/:id` | Takım lideri |
+| Dokümanlar | `/dokumanlar` | Takım lideri |
+| Ekip üyeleri ve yük | `/ekip` | Takım lideri |
+| Veri etiketleme | `/etiketle` | Model geliştirme |
 
 Geliştirme aşamasında kullanıcı, kenar menünün altındaki listeden değiştirilir (`Ayşe Kaya` personel, `Burak Şen` takım lideri). Tüm demo kişi ve görevleri kurgusaldır.
 

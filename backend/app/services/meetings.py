@@ -265,21 +265,7 @@ def process(meeting_id: int) -> None:
             m.transcript = merge_segments(segs)
             if not m.transcript:
                 raise RuntimeError("Kayıtlarda anlaşılır konuşma bulunamadı.")
-
-            _set(db, m, "Görevler çıkarılıyor…")
-            doc = Document(title=f"{m.title} (toplantı)", doc_type="meeting", text=transcript_text(m),
-                           uploaded_by=m.created_by, team_id=m.team_id, shared_with=list(m.participants))
-            db.add(doc)
-            db.flush()
-            m.document_id = doc.id
-            tasks = extract_for_document(db, doc)
-            db.commit()
-            fill_short_titles([t.id for t in tasks])  # rapor da kısa başlıkları kullansın
-
-            summary = llm_summary(m, lambda p: _set(db, m, p))
-            m.report = build_report(db, m, summary, tasks)
-            m.status, m.progress = "done", ""
-            db.commit()
+            finalize(db, m)
             if not get_settings().keep_audio:
                 for r in recs:
                     try:
@@ -295,6 +281,25 @@ def process(meeting_id: int) -> None:
 
 
 GRACE_S = 8.0  # son kayıt parçalarının yüklenmesi için bekleme
+
+
+def finalize(db: Session, m: Meeting) -> list[Task]:
+    """Döküm hazır: doküman oluştur, görevleri çıkar, raporu yaz."""
+    _set(db, m, "Görevler çıkarılıyor…")
+    doc = Document(title=f"{m.title} (toplantı)", doc_type="meeting", text=transcript_text(m),
+                   uploaded_by=m.created_by, team_id=m.team_id, shared_with=list(m.participants))
+    db.add(doc)
+    db.flush()
+    m.document_id = doc.id
+    tasks = extract_for_document(db, doc)
+    db.commit()
+    fill_short_titles([t.id for t in tasks])  # rapor da kısa başlıkları kullansın
+
+    summary = llm_summary(m, lambda p: _set(db, m, p))
+    m.report = build_report(db, m, summary, tasks)
+    m.status, m.progress = "done", ""
+    db.commit()
+    return tasks
 
 
 def start_processing(meeting_id: int) -> None:

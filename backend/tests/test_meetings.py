@@ -82,3 +82,13 @@ def test_report_flags_ungrounded_lines():
     out, n = svc.flag_ungrounded(report, transcript)
     assert n == 1 and "canlılar oluşturulması ve eğitim desteği sağlanması önerildi. ⚠️" in out
     assert "düzeltecek." in out.split("\n")[1] and "⚠️" not in out.split("\n")[1]
+
+
+def test_self_commitment_ignores_nouns():
+    from app.llm.text import self_commitment as f
+
+    assert not f("iOS tarafında Face ID oturum hatası kapandı, mağaza incelemesinden de geçtik.")
+    assert not f("Regresyon testleri şu an yaklaşık iki saat sürüyor, sürüm öncesi sıkıntı yaratıyor.")
+    assert not f("Sprint sonunda demo toplantısı yapacağız.")  # "biz", kişinin kendisi değil
+    assert f("Evet, bildirim izni akışına bu hafta bakarım.")
+    assert f("Kuyruk için yeni bir worker servisi gerekecek, onu ben ayarlarım.")

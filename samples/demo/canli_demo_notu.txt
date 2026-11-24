@@ -1,0 +1,13 @@
+Sprint 19 Ara Değerlendirme Notları
+Katılımcılar: Burak Şen (Takım lideri), Ayşe Kaya (Backend), Mert Demir (Mobil iOS), Selin Arslan (QA), Deniz Aksoy (Frontend Geliştirici)
+
+Fatura dışa aktarma kuyruğunun ilk sürümü test ortamına alındı.
+Yük testinde on bin satırlık rapor 40 saniyede üretildi, hedefimiz 15 saniyenin altı.
+Ayşe kuyruk işçisinin sorgularına sayfalama eklemeli.
+Deniz dışa aktarma ekranına ilerleme çubuğu ve tamamlandığında bildirim eklemeli.
+Selin yük testini sayfalama sonrasında tekrar koşmalı ve sonuçları paylaşmalı.
+iOS bildirim izni akışındaki takılma giderildi.
+Mert yeni bildirim akışı için mağaza ekran görüntülerini güncellemeli.
+Müşteri destek ekibinden gelen şikayet sayısı bu hafta yüzde otuz azaldı.
+Kimlik numarası maskeleme filtresinin güvenlik incelemesi yapılmalı.
+Not: Pazartesi günü sabah 10:00'da sürüm öncesi kontrol toplantısı var, tüm ekibin katılımı bekleniyor.

@@ -9,16 +9,23 @@ OBLIGATION = re.compile(
     re.IGNORECASE,
 )
 
-# Konuşma dilinde iş üstlenme (toplantı dökümleri): "ben bakarım", "yarın düzeltirim", "hallederim"
-SELF_COMMIT = re.compile(
-    r"(?:^|\s)(ben|bende|bana kalsın|ben de)(?=$|[\s,.;:!?])"
-    r"|\w+(?:acağım|eceğim|acağız|eceğiz|ırım|irim|urum|ürüm|arım|erim|ayım|eyim)(?=$|[\s,.;:!?])",
-    re.IGNORECASE,
-)
+# Konuşma dilinde iş üstlenme (toplantı dökümleri): "ben bakarım", "yarın düzeltirim", "hallederim".
+# Türkçe'de yüklem yan cümlenin sonundadır: yalnızca her yan cümlenin SON kelimesine bakılır.
+# Aksi halde "oturum", "sürüm", "bildirim" gibi isimler 1. şahıs fiil sanılır.
+_SELF_VERB = re.compile(r"\w{2,}(?:acağım|eceğim|ırım|irim|urum|ürüm|arım|erim|ayım|eyim|ıyorum|iyorum|uyorum|üyorum)$")
+_SELF_PHRASE = re.compile(r"(?:^|\s)(bana kalsın|bende kalsın|ben hallederim|ben bakarım)(?=$|[\s,.;:!?])")
+_CLAUSE = re.compile(r"[,.;:!?]|\s(?:ve|ama|fakat|ancak|çünkü)\s")
 
 
 def self_commitment(text: str) -> bool:
-    return bool(SELF_COMMIT.search(text.replace("I", "ı").replace("İ", "i").lower()))
+    low = text.replace("I", "ı").replace("İ", "i").lower()
+    if _SELF_PHRASE.search(low):
+        return True
+    for clause in _CLAUSE.split(low):
+        words = re.findall(r"[a-zçğıöşü]+", clause)
+        if words and _SELF_VERB.search(words[-1]):
+            return True
+    return False
 
 EST_RULES: list[tuple[tuple[str, ...], float]] = [
     (("yeniden yaz", "taşın", "mimari"), 5.0),
