@@ -46,7 +46,7 @@ flowchart LR
 
 | Ölçüm | Değer | Not |
 |---|---|---|
-| **Görev tespiti, kör test · v2** (yeni alan: e-ticaret, 1 doküman, 16 görev) | **F1 0.94** · kesinlik 0.89 · duyarlılık 1.00 | Kural tabanlı başlangıç aynı dokümanda: F1 0.59. Model bu doküman yazılmadan eğitildi; eğitimde görülmeyen bir alan. Küçük örnek. |
+| **Görev tespiti, kör test · v2** (yeni alan: e-ticaret, 2 doküman, 25 görev) | **F1 0.89** · kesinlik 0.81 · duyarlılık 1.00 | Kural tabanlı başlangıç aynı dokümanlarda: F1 0.55. Model bu dokümanlar yazılmadan eğitildi; eğitimde görülmeyen bir alan. |
 | Görev tespiti, kör test · v1 (2 doküman, 22 görev) | F1 0.80 · kesinlik 0.67 · duyarlılık 1.00 | Kural tabanlı başlangıç: F1 0.48. Etiketleyen kişi model çıktısını görmeden etiketledi; eğitim/ayar sırasında kullanılmadı. Dokümanlardan biri geliştirme sırasında görülmüştü (sızan eğitim cümleleri çıkarıldı); sonraki sürüm yeni dokümanlarla ölçülecek. |
 | Görev tespiti, zor doğrulama seti | F1 0.79 (eğitimsiz prototip) | Kural tabanlı başlangıç: 0.16 |
 | Görev tespiti, çapraz doğrulama (eğitim dokümanları) | F1 0.98 | Eğitimle aynı dağılım; iyimser. Kör testle arasındaki fark dağılım kaymasından. |
