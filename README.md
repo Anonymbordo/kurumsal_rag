@@ -50,7 +50,7 @@ flowchart LR
 | Görev tespiti, kör test · v1 (2 doküman, 22 görev) | F1 0.80 · kesinlik 0.67 · duyarlılık 1.00 | Kural tabanlı başlangıç: F1 0.48. Etiketleyen kişi model çıktısını görmeden etiketledi; eğitim/ayar sırasında kullanılmadı. Dokümanlardan biri geliştirme sırasında görülmüştü (sızan eğitim cümleleri çıkarıldı); sonraki sürüm yeni dokümanlarla ölçülecek. |
 | Görev tespiti, zor doğrulama seti | F1 0.79 (eğitimsiz prototip) | Kural tabanlı başlangıç: 0.16 |
 | Görev tespiti, çapraz doğrulama (eğitim dokümanları) | F1 0.98 | Eğitimle aynı dağılım; iyimser. Kör testle arasındaki fark dağılım kaymasından. |
-| Kişi önerisi, tespit edilen görevlerde | 6/6 | Küçük örnek |
+| Senaryo testi (`scripts/scenario_test.py`): doküman + toplantı, 23 davranış | 23/23 · kişi önerisi 13/13 | Geliştirici yazdı; kör test değil, regresyon testi. Her değişiklikten sonra çalıştırılır. |
 | Yanıt süresi (CPU) | _ölçülecek_ | Her sohbet cevabının altında istem/üretim süresi gösteriliyor |
 
 **Okuma:** Model kör testte hiçbir görevi kaçırmıyor; yanlış alarmların çoğu "Not: / Hatırlatma:" bilgilendirmeleri ve durum cümleleri. Uygulamada bilgilendirmeler ayrıca duyuru olarak ayrılıyor (bu ölçüm modelin ham çıktısıdır). Lider onaylı akışta yanlış alarm tek tıkla reddedilir ve ret, modelin eğitim verisine döner.
