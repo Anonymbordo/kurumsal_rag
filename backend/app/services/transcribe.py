@@ -31,6 +31,44 @@ class TranscriberUnavailable(RuntimeError):
     pass
 
 
+SAMPLE_RATE = 16000
+
+
+def decode_audio(path: str):
+    """Sesi 16 kHz mono float32 diziye çevirir (PyAV ile).
+
+    faster-whisper'ın kendi çözücüsü bazı PyAV sürümlerinde kırılıyor (av.open'a
+    artık desteklenmeyen 'metadata_errors' parametresini veriyor); bu yüzden ses
+    burada çözülüp modele hazır dizi olarak verilir. Bozuk parçalar atlanır.
+    """
+    import av
+    import numpy as np
+
+    resampler = av.AudioResampler(format="s16", layout="mono", rate=SAMPLE_RATE)
+    parts = []
+    with av.open(path, mode="r") as container:
+        if not container.streams.audio:
+            raise TranscriberUnavailable("Dosyada ses kanalı yok")
+        for frame in container.decode(audio=0):
+            try:
+                out = resampler.resample(frame)
+            except Exception:  # noqa: BLE001 — bozuk çerçeve
+                continue
+            for f in out if isinstance(out, list) else [out]:
+                if f is not None:
+                    parts.append(f.to_ndarray().reshape(-1))
+        try:
+            tail = resampler.resample(None)  # içerde kalan örnekler
+            for f in tail if isinstance(tail, list) else [tail]:
+                if f is not None:
+                    parts.append(f.to_ndarray().reshape(-1))
+        except Exception:  # noqa: BLE001
+            pass
+    if not parts:
+        return np.zeros(0, dtype=np.float32)
+    return np.concatenate(parts).astype(np.float32) / 32768.0
+
+
 class FasterWhisper:
     def __init__(self, model: str, compute_type: str, language: str):
         try:
@@ -44,8 +82,11 @@ class FasterWhisper:
         self.model = WhisperModel(model, device="cpu", compute_type=compute_type)
 
     def transcribe(self, path: str) -> list[Segment]:
+        audio = decode_audio(path)
+        if audio.size < SAMPLE_RATE // 2:  # yarım saniyeden kısa: konuşma yok
+            return []
         segments, _ = self.model.transcribe(
-            path,
+            audio,
             language=self.language,
             vad_filter=True,  # sessizliği atla: hem hız hem "sessizlikte uydurma" önlemi
             beam_size=1,  # açgözlü çözme: CPU'da ~2 kat hızlı, kalite farkı küçük
