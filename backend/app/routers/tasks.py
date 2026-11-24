@@ -8,10 +8,12 @@ from sqlalchemy.orm import Session
 
 from .. import serialize as S
 from ..db import get_db
-from ..deps import require_lead
-from ..models import Task, User
+from ..deps import current_user, require_lead
+from ..models import Document, Task, User
 from ..services import audit
 from ..services.extraction import promote_candidate
+from ..services.load import load_pct
+from ..services.titles import display_title
 from ..timeutil import utcnow
 
 router = APIRouter(prefix="/api/tasks", tags=["görevler"])
@@ -85,3 +87,42 @@ def decide(task_id: int, body: Decision, user: User = Depends(require_lead), db:
     db.commit()
     users = {u.id: u for u in db.scalars(select(User))}
     return S.task(db, t, users)
+
+
+@router.get("/{task_id}/source")
+def task_source(task_id: int, user: User = Depends(current_user), db: Session = Depends(get_db)):
+    """Personel için sade kaynak görünümü: görevin cümlesi dokümanda nerede, ne isteniyor, neden bu kişi.
+    Dokümandaki diğer görevler ve öneriler gösterilmez."""
+    t = db.get(Task, task_id)
+    if t is None or t.team_id != user.team_id:
+        raise HTTPException(404, "Görev bulunamadı")
+    doc = db.get(Document, t.document_id) if t.document_id else None
+    allowed = user.is_lead or t.assignee_id == user.id or (doc is not None and user.id in (doc.shared_with or []))
+    if not allowed:
+        raise HTTPException(403, "Bu görevi görme yetkiniz yok")
+    users = {u.id: u for u in db.scalars(select(User).where(User.team_id == t.team_id))}
+    by = users.get(t.assigned_by or t.decided_by or "")
+    who = users.get(t.assignee_id or t.suggested_assignee_id or "")
+    return {
+        "id": t.id,
+        "key": t.key or f"#{t.id}",
+        "title": display_title(t),
+        "sentence": t.source_quote or t.title,
+        "status": t.status,
+        "status_label": S.STATUS_LABELS.get(t.status, t.status),
+        "assignee": S.user_brief(who),
+        "is_mine": t.assignee_id == user.id,
+        "assigned_by": by.name if by else None,
+        "assigned_at": t.assigned_at.isoformat() if t.assigned_at else None,
+        "due": t.due_date.isoformat() if t.due_date else None,
+        "est_days": t.est_days,
+        "reasons": [r for r in (t.reasons or []) if "lider görev olarak" not in r],
+        "load": load_pct(db, who) if who else None,
+        "document": None if doc is None else {
+            "id": doc.id, "title": doc.title, "doc_type": doc.doc_type, "text": doc.text,
+            "uploaded_by": S.user_brief(doc.uploader), "created_at": doc.created_at.isoformat(),
+        },
+        "start": t.source_start,
+        "end": t.source_end,
+        "ref": t.source_ref,
+    }

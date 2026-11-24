@@ -102,6 +102,7 @@ class Task(Base):
     workstream: Mapped[str | None] = mapped_column(String(120), nullable=True)  # HDBSCAN küme adı
     is_outlier: Mapped[bool] = mapped_column(Boolean, default=False)  # hiçbir kümeye girmedi
     kind: Mapped[str] = mapped_column(String(20), default="task")  # task | announcement
+    short_title: Mapped[str | None] = mapped_column(String(120), nullable=True)  # kart başlığı (3-7 kelime)
     # Cümlede adı geçen ama ekipte kayıtlı olmayan kişiler
     unknown_mentions: Mapped[list] = mapped_column(JSON, default=list)
 

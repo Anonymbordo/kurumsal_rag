@@ -172,3 +172,21 @@ def test_list_and_delete_document(client):
     first = client.get("/api/documents", headers=LEAD).json()[-1]
     client.delete(f"/api/documents/{first['id']}", headers=LEAD)
     assert len(client.get("/api/tasks/mine", headers=AYSE).json()) == len(mine_before)
+
+
+def test_task_source_view_and_titles(client):
+    from app.services.titles import acceptable, rule_title
+
+    assert rule_title("Emre, kredi kartı taksitlendirme servisindeki yanıt sürelerini düşürmek için önbellek katmanını devreye almalı.").startswith("Kredi kartı")
+    assert acceptable("Taksitlendirme servisinde önbellek katmanı", "Emre, kredi kartı taksitlendirme servisindeki yanıt sürelerini düşürmek için önbellek katmanını devreye almalı.")
+    assert not acceptable("Yeni mikroservis mimarisi kurulumu", "Önbellek katmanı devreye alınmalı.")
+
+    mine = client.get("/api/tasks/mine", headers=AYSE).json()
+    tid = mine[0]["id"]
+    src = client.get(f"/api/tasks/{tid}/source", headers=AYSE).json()
+    assert src["is_mine"] and src["sentence"] and src["title"]
+    if src["document"]:
+        assert src["document"]["text"][src["start"]:src["end"]].strip()
+    other = {"X-User-Id": "can"}
+    r = client.get(f"/api/tasks/{tid}/source", headers=other)
+    assert r.status_code in (200, 403)  # paylaşılan dokümansa görebilir, değilse 403

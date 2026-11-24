@@ -26,6 +26,7 @@ from ..llm.decoder import DecoderUnavailable, get_decoder
 from ..models import Document, Meeting, MeetingRecording, Task, User
 from ..timeutil import utcnow
 from .extraction import extract_for_document
+from .titles import display_title, fill_short_titles
 from .transcribe import get_transcriber
 
 MERGE_GAP_S = 4.0  # aynı kişinin bu kadar yakın sözleri tek paragraf olur
@@ -218,7 +219,8 @@ def build_report(db: Session, m: Meeting, summary: str | None, tasks: list[Task]
         out.append("Dökümde görev bulunamadı.")
     for t in real:
         who = users.get(t.suggested_assignee_id or "")
-        out.append(f"- {t.title} → **{who.name if who else 'atanmadı'}** ({t.source_ref})")
+        db.refresh(t)
+        out.append(f"- {display_title(t)} → **{who.name if who else 'atanmadı'}** ({t.source_ref})")
     ann = [t for t in tasks if t.kind == "announcement"]
     if ann:
         out.append("\n## Duyurular")
@@ -272,6 +274,7 @@ def process(meeting_id: int) -> None:
             m.document_id = doc.id
             tasks = extract_for_document(db, doc)
             db.commit()
+            fill_short_titles([t.id for t in tasks])  # rapor da kısa başlıkları kullansın
 
             summary = llm_summary(m, lambda p: _set(db, m, p))
             m.report = build_report(db, m, summary, tasks)

@@ -5,6 +5,7 @@ import type {
   DocListItem,
   MeetingDetail,
   MeetingInfo,
+  TaskSource,
   DocPerson,
   DocumentInfo,
   Group,
@@ -141,6 +142,7 @@ export const api = {
 
   teamMembers: () => request<User[]>('/api/team/members'),
 
+  taskSource: (id: number) => request<TaskSource>(`/api/tasks/${id}/source`),
   meetings: () => request<MeetingInfo[]>('/api/meetings'),
   meeting: (id: number) => request<MeetingDetail>(`/api/meetings/${id}`),
   createMeeting: (title: string, participants: string[]) => post<MeetingDetail>('/api/meetings', { title, participants }),

@@ -73,10 +73,7 @@ export function Sidebar() {
             type="button"
             className="navitem"
             style={{ border: 0, background: 'none', cursor: 'pointer', textAlign: 'left' }}
-            onClick={async () => {
-              const r = await api.startConversation(`${t.key} görevini neden ben aldım?`)
-              navigate(`/c/${r.conversation.id}`)
-            }}
+            onClick={() => navigate(`/gorev/${t.id}`)}
           >
             <span className="grow">
               {t.key} · {t.title}

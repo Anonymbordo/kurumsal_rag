@@ -23,25 +23,22 @@ function BlockView({ block }: { block: Block }) {
     return (
       <>
         {block.items.map((t) => (
-          <article className="card" key={t.id}>
+          <article className="card taskcard" key={t.id}>
             <div className="card-head">
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
                 <span className="keytag">{t.key}</span>
-                <h3>{t.title}</h3>
+                <h3 className="oneline">{t.title}</h3>
               </div>
               <span className={`badge ${t.tone}`}>{t.tag}</span>
             </div>
             <div className="meta-row">
+              <span>Teslim: <b>{t.due}</b></span>
               <span>Atayan: {t.assigned_by}</span>
-              <span>Teslim: {t.due}</span>
-              <span>Kaynak: {t.source}</span>
             </div>
             {t.note && <p className="note">{t.note}</p>}
-            {t.document_id && (
-              <div className="actions">
-                <Link className="btn small" to={`/dokuman/${t.document_id}`}>Kaynağı aç</Link>
-              </div>
-            )}
+            <div className="actions">
+              <Link className="btn small" to={`/gorev/${t.id}`}>Görevi aç</Link>
+            </div>
           </article>
         ))}
       </>

@@ -85,6 +85,7 @@ export interface TaskCardItem {
   id: number
   key: string
   title: string
+  sentence?: string
   tag: string
   tone: 'new' | 'active' | 'done'
   assigned_by: string
@@ -171,4 +172,25 @@ export interface MeetingDetail extends MeetingInfo {
   report: string
   transcript: { speaker: string; user_id: string | null; start: number; end: number; ts: string; text: string }[]
   recordings: { id: number; speaker: string; user_id: string | null; chunks: number; bytes: number }[]
+}
+
+export interface TaskSource {
+  id: number
+  key: string
+  title: string
+  sentence: string
+  status: string
+  status_label: string
+  assignee: Person | null
+  is_mine: boolean
+  assigned_by: string | null
+  assigned_at: string | null
+  due: string | null
+  est_days: number
+  reasons: string[]
+  load: number | null
+  document: { id: number; title: string; doc_type: string; text: string; uploaded_by: Person | null; created_at: string } | null
+  start: number
+  end: number
+  ref: string
 }

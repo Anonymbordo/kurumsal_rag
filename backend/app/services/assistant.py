@@ -17,6 +17,7 @@ from ..llm.decoder import DecoderUnavailable, get_decoder
 from . import rag
 from ..models import Document, Message, Task, User
 from .load import load_pct
+from .titles import display_title
 from ..timeutil import utcnow
 
 TASK_KEY = re.compile(r"\b([A-Za-zÇĞİÖŞÜçğıöşü]{1,6}-\d+)\b")
@@ -88,7 +89,8 @@ def _task_card(db: Session, t: Task, users: dict[str, User], me: User) -> dict:
     return {
         "id": t.id,
         "key": t.key or f"#{t.id}",
-        "title": t.title,
+        "title": display_title(t),
+        "sentence": t.source_quote or t.title,
         "tag": "Yeni atandı" if recent else ("Tamamlandı" if t.status == "done" else "Devam ediyor"),
         "tone": "new" if recent else ("done" if t.status == "done" else "active"),
         "assigned_by": assigned_by.name if assigned_by else "—",

@@ -14,6 +14,7 @@ from ..services.documents import UnsupportedFile, extract_text
 from ..services.extraction import extract_for_document
 from ..services.people import roster
 from ..services.team import create_member
+from ..services.titles import fill_in_background
 from ..timeutil import utcnow
 
 router = APIRouter(prefix="/api/documents", tags=["dokümanlar"])
@@ -131,6 +132,7 @@ def extract(doc_id: int, user: User = Depends(require_lead), db: Session = Depen
     tasks = extract_for_document(db, doc)
     audit.log(db, user.id, "document.extract", f"document:{doc.id}", count=len(tasks))
     db.commit()
+    fill_in_background([t.id for t in tasks])  # kısa başlıklar arka planda (decoder varsa)
     users = _users(db)
     return [S.task(db, t, users) for t in db.scalars(select(Task).where(Task.document_id == doc.id).order_by(Task.order_no))]
 

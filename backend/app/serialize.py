@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session
 
 from .models import Conversation, Document, Group, Message, Task, User
 from .services.load import load_pct
+from .services.titles import display_title
 
 STATUS_LABELS = {
     "suggested": "Karar bekliyor",
@@ -46,7 +47,8 @@ def task(db: Session, t: Task, users: dict[str, User]) -> dict:
         "key": t.key,
         "order_no": t.order_no,
         "document_id": t.document_id,
-        "title": t.title,
+        "title": display_title(t),
+        "sentence": t.source_quote or t.title,
         "detail": t.detail,
         "tags": t.tags,
         "est_days": t.est_days,
