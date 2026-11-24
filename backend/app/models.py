@@ -153,3 +153,46 @@ class AuditLog(Base):
     target: Mapped[str] = mapped_column(String(120))
     detail: Mapped[dict] = mapped_column(JSON, default=dict)
     at: Mapped[datetime] = mapped_column(DateTime, default=_now)
+
+
+class Meeting(Base):
+    """Portal üzerinden yapılan toplantı.
+
+    Durumlar: live -> processing -> done | failed
+    Her katılımcının mikrofonu kendi tarayıcısında ayrı kaydedilir (MeetingRecording);
+    böylece "kim konuştu" bilgisi konuşmacı ayrıştırma modeli olmadan kesin bilinir.
+    """
+
+    __tablename__ = "meetings"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    team_id: Mapped[str] = mapped_column(ForeignKey("teams.id"))
+    title: Mapped[str] = mapped_column(String(255))
+    room: Mapped[str] = mapped_column(String(120))  # Jitsi oda adı (tahmin edilemez)
+    created_by: Mapped[str] = mapped_column(ForeignKey("users.id"))
+    participants: Mapped[list] = mapped_column(JSON, default=list)  # kullanıcı id'leri
+    status: Mapped[str] = mapped_column(String(20), default="live")
+    progress: Mapped[str] = mapped_column(String(255), default="")
+    error: Mapped[str] = mapped_column(Text, default="")
+    started_at: Mapped[datetime] = mapped_column(DateTime, default=_now)
+    ended_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    # [{"user_id","speaker","start","end","text"}] — saniye, toplantı başından itibaren
+    transcript: Mapped[list] = mapped_column(JSON, default=list)
+    report: Mapped[str] = mapped_column(Text, default="")  # markdown
+    document_id: Mapped[int | None] = mapped_column(ForeignKey("documents.id"), nullable=True)
+
+
+class MeetingRecording(Base):
+    """Bir katılımcının bir kayıt oturumu (tarayıcıdaki MediaRecorder akışı).
+    Parçalar sırayla aynı dosyaya eklenir; webm/opus akışı ancak bütün halinde çözülebilir."""
+
+    __tablename__ = "meeting_recordings"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    meeting_id: Mapped[int] = mapped_column(ForeignKey("meetings.id"))
+    user_id: Mapped[str | None] = mapped_column(ForeignKey("users.id"), nullable=True)
+    speaker: Mapped[str] = mapped_column(String(120), default="")
+    offset_s: Mapped[float] = mapped_column(Float, default=0.0)  # toplantı başına göre başlangıç
+    chunks: Mapped[int] = mapped_column(Integer, default=0)
+    bytes: Mapped[int] = mapped_column(Integer, default=0)
+    path: Mapped[str] = mapped_column(String(500))
+    mime: Mapped[str] = mapped_column(String(60), default="audio/webm")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_now)

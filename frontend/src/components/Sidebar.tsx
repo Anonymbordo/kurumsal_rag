@@ -99,6 +99,12 @@ export function Sidebar() {
             <span className="meta">{g.member_count}</span>
           </div>
         ))}
+        <NavLink to="/toplantilar" className={({ isActive }) => `navitem${isActive ? ' active' : ''}`}>
+          <span className="chip-sq" style={{ background: '#eef1f5' }} aria-hidden="true">
+            <IconUsers size={14} />
+          </span>
+          <span className="grow">Toplantılar</span>
+        </NavLink>
         {me?.is_lead && (
           <NavLink to="/dokumanlar" className={({ isActive }) => `navitem${isActive ? ' active' : ''}`}>
             <span className="chip-sq" style={{ background: '#eef1f5' }} aria-hidden="true">

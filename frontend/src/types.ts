@@ -151,3 +151,24 @@ export interface SkillOption {
 export interface DocListItem extends DocumentInfo {
   counts: { pending: number; accepted: number; active: number }
 }
+
+export interface MeetingInfo {
+  id: number
+  title: string
+  status: 'live' | 'processing' | 'done' | 'failed'
+  progress: string
+  error: string
+  created_by: Person | null
+  participants: Person[]
+  started_at: string
+  ended_at: string | null
+  document_id: number | null
+}
+
+export interface MeetingDetail extends MeetingInfo {
+  room: string
+  jitsi_domain: string
+  report: string
+  transcript: { speaker: string; user_id: string | null; start: number; end: number; ts: string; text: string }[]
+  recordings: { id: number; speaker: string; user_id: string | null; chunks: number; bytes: number }[]
+}

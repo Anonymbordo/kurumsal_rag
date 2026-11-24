@@ -9,6 +9,17 @@ OBLIGATION = re.compile(
     re.IGNORECASE,
 )
 
+# Konuşma dilinde iş üstlenme (toplantı dökümleri): "ben bakarım", "yarın düzeltirim", "hallederim"
+SELF_COMMIT = re.compile(
+    r"(?:^|\s)(ben|bende|bana kalsın|ben de)(?=$|[\s,.;:!?])"
+    r"|\w+(?:acağım|eceğim|acağız|eceğiz|ırım|irim|urum|ürüm|arım|erim|ayım|eyim)(?=$|[\s,.;:!?])",
+    re.IGNORECASE,
+)
+
+
+def self_commitment(text: str) -> bool:
+    return bool(SELF_COMMIT.search(text.replace("I", "ı").replace("İ", "i").lower()))
+
 EST_RULES: list[tuple[tuple[str, ...], float]] = [
     (("yeniden yaz", "taşın", "mimari"), 5.0),
     (("test", "regresyon", "maskel"), 3.0),

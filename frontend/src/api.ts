@@ -3,6 +3,8 @@ import type {
   ChatMessage,
   Conversation,
   DocListItem,
+  MeetingDetail,
+  MeetingInfo,
   DocPerson,
   DocumentInfo,
   Group,
@@ -81,7 +83,7 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   const headers = new Headers(init.headers)
   const uid = getUserId()
   if (uid) headers.set('X-User-Id', uid)
-  if (init.body && !(init.body instanceof FormData)) headers.set('Content-Type', 'application/json')
+  if (typeof init.body === 'string') headers.set('Content-Type', 'application/json')
   const res = await fetch(path, { ...init, headers })
   if (!res.ok) {
     let msg = `İstek başarısız (${res.status})`
@@ -138,6 +140,20 @@ export const api = {
   labelStats: () => request<{ train_sentences: number; test_documents: number }>('/api/labeling/stats'),
 
   teamMembers: () => request<User[]>('/api/team/members'),
+
+  meetings: () => request<MeetingInfo[]>('/api/meetings'),
+  meeting: (id: number) => request<MeetingDetail>(`/api/meetings/${id}`),
+  createMeeting: (title: string, participants: string[]) => post<MeetingDetail>('/api/meetings', { title, participants }),
+  startRecording: (id: number) => post<{ id: number; offset_s: number }>(`/api/meetings/${id}/recordings`),
+  uploadChunk: (rid: number, seq: number, blob: Blob) =>
+    request<{ chunks: number }>(`/api/meetings/recordings/${rid}/chunks?seq=${seq}`, {
+      method: 'POST',
+      body: blob,
+      headers: { 'Content-Type': 'application/octet-stream' },
+    }),
+  uploadMeetingAudio: (id: number, form: FormData) => post<{ id: number; bytes: number }>(`/api/meetings/${id}/audio`, form),
+  endMeeting: (id: number) => post<MeetingDetail>(`/api/meetings/${id}/end`),
+  retryMeeting: (id: number) => post<MeetingDetail>(`/api/meetings/${id}/retry`),
   skillOptions: () => request<SkillOption[]>('/api/team/skills'),
   addMember: (body: { name: string; role: string; skills?: string[]; base_load_days?: number }) =>
     post<User>('/api/team/members', body),

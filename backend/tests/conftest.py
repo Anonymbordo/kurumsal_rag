@@ -6,6 +6,7 @@ from pathlib import Path
 _tmp = tempfile.mkdtemp()
 os.environ["GA_DATABASE_URL"] = f"sqlite:///{_tmp}/test.db"
 os.environ["GA_FRONTEND_DIST"] = f"{_tmp}/yok"
+os.environ["GA_DATA_DIR"] = f"{_tmp}/data"
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import pytest  # noqa: E402

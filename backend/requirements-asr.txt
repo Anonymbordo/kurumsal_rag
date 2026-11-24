@@ -1,0 +1,3 @@
+# Toplantı kayıtlarını yazıya dökmek için (CPU, int8). Ses çözümü PyAV ile; ayrıca ffmpeg gerekmez.
+-r requirements.txt
+faster-whisper>=1.0

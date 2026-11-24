@@ -122,7 +122,10 @@ class OllamaDecoder:
             r.read()
 
     # --- Üretim -----------------------------------------------------------
-    def _body(self, system: str, turns: list[ChatTurn], stream: bool, max_tokens: int | None, temperature: float) -> dict:
+    def _body(
+        self, system: str, turns: list[ChatTurn], stream: bool, max_tokens: int | None, temperature: float,
+        num_ctx: int | None = None,
+    ) -> dict:
         body = {
             "model": self.model,
             "stream": stream,
@@ -131,7 +134,7 @@ class OllamaDecoder:
             "options": {
                 "temperature": temperature,
                 "num_predict": max_tokens or self.max_tokens,
-                "num_ctx": self.num_ctx,
+                "num_ctx": num_ctx or self.num_ctx,
             },
         }
         if self.logprobs:
@@ -158,10 +161,12 @@ class OllamaDecoder:
         return [x["logprob"] for x in (d.get("logprobs") or []) if isinstance(x, dict) and "logprob" in x]
 
     def generate(
-        self, system: str, turns: list[ChatTurn], max_tokens: int | None = None, temperature: float = 0.2
+        self, system: str, turns: list[ChatTurn], max_tokens: int | None = None, temperature: float = 0.2,
+        num_ctx: int | None = None,
     ) -> Generation:
         t0 = time.time()
-        with self._open(self._request("/api/chat", self._body(system, turns, False, max_tokens, temperature)), self.timeout) as r:
+        body = self._body(system, turns, False, max_tokens, temperature, num_ctx)
+        with self._open(self._request("/api/chat", body), max(self.timeout, 300)) as r:
             data = json.loads(r.read().decode())
         return self._finish((data.get("message") or {}).get("content", ""), self._logprobs(data), data, t0)
 

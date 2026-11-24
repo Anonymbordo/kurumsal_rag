@@ -87,6 +87,27 @@ soru ─► e5 (encoder): kullanıcının görevleri + paylaşılan doküman cü
 Kurulum: [Ollama](https://ollama.com) yükleyin, `ollama pull qwen2.5:3b`, `.env` içinde `GA_DECODER=ollama`.
 Ollama kapalıysa uygulama şablon cevaplarla çalışmaya devam eder.
 
+## Toplantılar (ses → döküm → rapor → görev)
+
+```
+Jitsi görüşmesi (kurum içi)        her katılımcının tarayıcısı kendi mikrofonunu kaydeder (10 sn parçalar)
+        │                          → konuşmacı ayrımı modeli gerekmez, "kim konuştu" kesin
+        ▼
+faster-whisper (CPU, int8, tr)     her kayıt ayrı yazıya dökülür, toplantı zamanına göre birleşir
+        ▼
+döküm dokümanı                     "Ayşe Kaya: Fatura zaman aşımını ben yarın düzeltirim."
+        ▼
+görev çıkarma hattı                encoder + probe + kümeleme + kişi önerisi
+                                   konuşan kişi işi üstlendiyse ("ben bakarım") ona önerilir
+        ▼
+rapor                              özet/kararlar decoder'dan (varsa), görev listesi her zaman hattan
+```
+
+Kurulum: `pip install -r requirements-asr.txt` (whisper modeli ilk kullanımda iner, small ≈ 470 MB).
+Görüntülü görüşme için kurum içine [docker-jitsi-meet](https://github.com/jitsi/docker-jitsi-meet)
+kurulur ve `GA_JITSI_DOMAIN` verilir. Ses dosyaları yazıya döküldükten sonra silinir (`GA_KEEP_AUDIO=false`);
+her katılımcı kayıttan önce açık rıza verir.
+
 ## Modeli iyileştirme
 
 Veri toplama, etiketleme ve aktif öğrenme döngüsü: [`docs/VERI_TOPLAMA.md`](docs/VERI_TOPLAMA.md)

@@ -11,6 +11,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from ..config import get_settings
+from ..llm.text import self_commitment
 from ..models import Task, User
 from .load import load_pct
 
@@ -141,6 +142,7 @@ def suggest(
     semantic: SemanticMap | None = None,
     text: str = "",
     pending_days: dict[str, float] | None = None,
+    speaker_id: str | None = None,
 ) -> Suggestion:
     ranked = rank_candidates(db, team_id, tags, semantic, pending_days)
     if not ranked:
@@ -159,6 +161,18 @@ def suggest(
             free = [c for c in ranked if c.user.id != first.user.id and c.load < CAPACITY_LIMIT_PCT]
             alt = free[0] if free else None
         return Suggestion(first.user.id, alt.user.id if alt else None, 3, reasons)
+
+    # Toplantıda konuşan kişi işi kendisi üstlendiyse ("ben bakarım", "yarın hallederim")
+    if speaker_id and text and self_commitment(text):
+        by_id = {c.user.id: c for c in ranked}
+        me = by_id.get(speaker_id)
+        if me is not None:
+            reasons = [f"Toplantıda {me.user.name} işi kendisi üstlendi"] + _reasons(me)[1:]
+            alt = None
+            if me.load >= OVERLOAD_PCT:
+                free = [c for c in ranked if c.user.id != me.user.id and c.load < CAPACITY_LIMIT_PCT]
+                alt = free[0] if free else None
+            return Suggestion(me.user.id, alt.user.id if alt else None, 3, reasons)
 
     top = ranked[0]
     alt = None

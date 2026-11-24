@@ -5,6 +5,10 @@ modeli eğitmeden kaliteyi artırmanın en ucuz yoludur.
 """
 
 TASK_EXAMPLES = [
+    # Konuşma dili (toplantı dökümü): üstlenme ve rica
+    "Ödeme servisindeki zaman aşımını ben yarın düzeltirim.",
+    "Raporlama ekranına bu hafta ben bakacağım.",
+    "Mert, bildirim akışına bir bakabilir misin?",
     "Limit kontrolü tek bir servise taşınmalı.",
     "Ödeme API'si yeniden yazılmalı.",
     "Giriş ekranındaki hata düzeltilmeli.",
@@ -28,6 +32,14 @@ TASK_EXAMPLES = [
 ]
 
 NON_TASK_EXAMPLES = [
+    # Konuşma dili: durum anlatımı, onay, sohbet
+    "Geçen hafta ödeme tarafında sorun yaşamadık.",
+    "Evet, ben de aynı fikirdeyim.",
+    "Herkese günaydın, başlayalım mı?",
+    # Konuşma dili (toplantı dökümü): üstlenme ve rica
+    "Ödeme servisindeki zaman aşımını ben yarın düzeltirim.",
+    "Raporlama ekranına bu hafta ben bakacağım.",
+    "Mert, bildirim akışına bir bakabilir misin?",
     "Bu sprintin ana hedefi müşteri şikayetlerini azaltmak.",
     "Toplantıya ekibin tamamı katıldı.",
     "Android tarafında sorun görülmedi.",

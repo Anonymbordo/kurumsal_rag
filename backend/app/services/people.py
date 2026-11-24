@@ -147,3 +147,29 @@ def is_announcement(text: str, people: list[Person], members: list[User]) -> boo
         return False
     low = tr_lower(text)
     return bool(INFO_PREFIX.match(text)) or any(w in low for w in ALL_HANDS)
+
+
+# Toplantı dökümü satırı: "Ayşe Kaya: ..." (konuşmacı etiketi)
+SPEAKER = re.compile(rf"^\s*([{UP}][{LO}]+(?:[ \t]+[{UP}][{LO}]+){{0,2}}):\s+")
+
+
+def strip_speaker(text: str) -> str:
+    m = SPEAKER.match(text)
+    if m and tr_lower(m.group(1)) not in INFO_HEADS:
+        return text[m.end():]
+    return text
+
+
+INFO_HEADS = {"not", "nota", "hatırlatma", "genel hatırlatma", "duyuru", "bilgi", "bilgilendirme", "önemli",
+              "katılımcılar", "katılanlar", "gündem", "karar", "kararlar", "tarih", "konu", "kime", "ekip"}
+
+
+def speaker_at(text: str, pos: int, members: list[User]) -> User | None:
+    """`pos` konumundaki cümlenin bulunduğu satır bir konuşmacı etiketiyle başlıyorsa o kişi."""
+    if pos is None or pos < 0:
+        return None
+    line_start = text.rfind("\n", 0, pos) + 1
+    m = SPEAKER.match(text[line_start: line_start + 80])
+    if not m or tr_lower(m.group(1)) in INFO_HEADS:
+        return None
+    return _match_member(m.group(1), members)

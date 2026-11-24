@@ -15,7 +15,8 @@ import numpy as np
 # (ad, açıklama, düzenli ifade, nerede: "son" = son kelime, "tum" = tüm cümle)
 PATTERNS: list[tuple[str, str, str | None, str]] = [
     ("yukumluluk", "-meli/-malı, gerekiyor, şart, lazım", r"m[ae]l[ıi](d[ıi]r)?$|^gerek(iyor|ir|mektedir|li)?$|^şart(tır)?$|^lazım$", "son"),
-    ("gelecek", "-acak/-ecek", r"(y)?[ae]c[ae]k(t[ıi]r|s[ıi]n[ıi]z)?$", "son"),
+    # -acak/-ecek; konuşma dilinde 1. şahıs üstlenme de bu sütunda: -acağım/-eceğiz, "düzeltirim", "bakarım"
+    ("gelecek", "-acak/-ecek, -acağım, -ırım (üstlenme)", r"(y)?[ae]c[ae]k(t[ıi]r|s[ıi]n[ıi]z)?$|(y)?[ae]c[ae]ğ[ıi](m|z)$|..(ır|ir|ur|ür|ar|er)[ıiuü]m$", "son"),
     ("emir_istek", "-sın/-sin, -alım/-elim", r"..s[ıiuü]n(lar|ler)?$|(y)?[ae]l[ıi]m$", "son"),
     ("gecmis", "-dı/-tı/-mış (tamamlanmış)", r"..[dt][ıiuü](k|lar|ler)?$|m[ıiuü]ş(t[ıi]r|lar)?$", "son"),
     ("suren", "-ıyor (süren durum)", r"yor(uz|lar|um|sun|du)?$", "son"),

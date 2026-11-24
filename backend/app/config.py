@@ -46,6 +46,14 @@ class Settings(BaseSettings):
     decoder_warmup: bool = True  # uygulama açılırken modeli belleğe yükle
     rag_top_k: int = 4  # decoder'a verilecek en fazla kayıt (prompt kısa = prefill hızlı)
 
+    # Toplantılar
+    data_dir: str = "./data"  # ses kayıtları burada tutulur
+    jitsi_domain: str = ""  # kurum içi Jitsi sunucusu, ör. meet.kurum.local (boşsa yalnızca ses kaydı)
+    whisper_model: str = "small"  # faster-whisper: tiny | base | small | medium | large-v3
+    whisper_compute: str = "int8"  # CPU için 8-bit kuantizasyon
+    whisper_language: str = "tr"
+    keep_audio: bool = False  # transkript sonrası ses dosyaları silinsin (KVKK: veri minimizasyonu)
+
     # Sprint kapasitesi (kişi başı iş günü) — yük yüzdesi bunun üzerinden hesaplanır.
     sprint_capacity_days: float = 10.0
 

@@ -22,3 +22,4 @@ frontend/public/brand/*
 backend/models/
 *.db-wal
 *.db-shm
+backend/data/

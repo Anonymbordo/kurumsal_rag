@@ -17,7 +17,7 @@ from ..ml.clustering import cluster
 from ..ml.embedder import Embedder, HashingEmbedder
 from ..models import Document, Task, User
 from .assignment import SemanticMap, suggest
-from .people import is_announcement, roster, unknown_mentioned
+from .people import is_announcement, roster, speaker_at, strip_speaker, unknown_mentioned
 
 OUTLIER_REASON = "Ekipte benzeri yapılmamış, alışılmadık bir görev"
 ANNOUNCE_REASON = "Tek bir kişiye değil, tüm ekibe yönelik bir bilgilendirme gibi görünüyor"
@@ -92,7 +92,10 @@ def extract_for_document(db: Session, doc: Document) -> list[Task]:
             db.add(t)
             tasks.append(t)
             continue
-        quote = ex.source_quote or ex.title
+        # Toplantı dökümünde satır "Ayşe Kaya: ..." diye başlar: konuşan kişi ayrı bir sinyaldir,
+        # ama adı "cümlede geçiyor" sayılmamalı.
+        speaker = speaker_at(doc.text, ex.source_start, members)
+        quote = strip_speaker(ex.source_quote or ex.title)
         if is_announcement(quote, people, members):
             t = Task(
                 document_id=doc.id, team_id=doc.team_id, order_no=next_no + i + 1, title=ex.title,
@@ -106,7 +109,10 @@ def extract_for_document(db: Session, doc: Document) -> list[Task]:
             continue
         unknown = unknown_mentioned(quote, people, members)
         semantic = _semantic_map(new_vecs[i], history, hist_vecs) if semantic_ok else None
-        s = suggest(db, doc.team_id, ex.tags, semantic, text=ex.source_quote, pending_days=pending)
+        s = suggest(
+            db, doc.team_id, ex.tags, semantic, text=quote, pending_days=pending,
+            speaker_id=speaker.id if speaker else None,
+        )
         if s.assignee_id:
             pending[s.assignee_id] = pending.get(s.assignee_id, 0.0) + ex.est_days
         confidence, reasons = s.confidence, list(s.reasons)
