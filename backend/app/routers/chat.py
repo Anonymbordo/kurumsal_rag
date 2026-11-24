@@ -35,12 +35,14 @@ def list_conversations(user: User = Depends(current_user), db: Session = Depends
 @router.post("")
 def start(body: NewMessage, user: User = Depends(current_user), db: Session = Depends(get_db)):
     """İlk mesajla yeni sohbet başlatır ve asistanın yanıtını döner."""
+    # Cevap (dil modeli çağrısı uzun sürebilir) veritabanına yazmadan ÖNCE hesaplanır;
+    # böylece yazma kilidi model beklenirken tutulmaz.
+    reply = answer(db, user, body.text, [])
     title = body.text.strip().split("\n")[0]
     conv = Conversation(user_id=user.id, title=title[:60] + ("…" if len(title) > 60 else ""))
     db.add(conv)
     db.flush()
-    reply = _send(db, conv, user, body.text)
-    return {"conversation": S.conversation(conv), "messages": reply}
+    return {"conversation": S.conversation(conv), "messages": _save(db, conv, body.text, reply)}
 
 
 @router.get("/{conv_id}/messages")
@@ -53,14 +55,14 @@ def messages(conv_id: int, user: User = Depends(current_user), db: Session = Dep
 @router.post("/{conv_id}/messages")
 def post_message(conv_id: int, body: NewMessage, user: User = Depends(current_user), db: Session = Depends(get_db)):
     conv = _own(db, conv_id, user)
-    return {"messages": _send(db, conv, user, body.text)}
-
-
-def _send(db: Session, conv: Conversation, user: User, text: str) -> list[dict]:
     history = list(db.scalars(select(Message).where(Message.conversation_id == conv.id).order_by(Message.id)))
+    reply = answer(db, user, body.text, history)  # önce cevap, sonra yazma (bkz. start)
+    return {"messages": _save(db, conv, body.text, reply)}
+
+
+def _save(db: Session, conv: Conversation, text: str, reply) -> list[dict]:
     user_msg = Message(conversation_id=conv.id, role="user", text=text)
     db.add(user_msg)
-    reply = answer(db, user, text, history)
     bot_msg = Message(conversation_id=conv.id, role="assistant", text=reply.text, blocks=reply.blocks, sources=reply.sources)
     db.add(bot_msg)
     conv.updated_at = utcnow()

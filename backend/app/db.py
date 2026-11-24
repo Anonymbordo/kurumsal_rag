@@ -6,9 +6,22 @@ from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 from .config import get_settings
 
 _settings = get_settings()
-_connect_args = {"check_same_thread": False} if _settings.database_url.startswith("sqlite") else {}
+_is_sqlite = _settings.database_url.startswith("sqlite")
+# timeout: başka bir istek yazarken kilidin açılmasını 30 sn bekle (varsayılan 5 sn)
+_connect_args = {"check_same_thread": False, "timeout": 30} if _is_sqlite else {}
 
 engine = create_engine(_settings.database_url, connect_args=_connect_args)
+
+if _is_sqlite:
+    from sqlalchemy import event
+
+    @event.listens_for(engine, "connect")
+    def _sqlite_pragmas(dbapi_conn, _):
+        # WAL: okuyanlar yazanı, yazan okuyanları bekletmez (eşzamanlı istekler için)
+        cur = dbapi_conn.cursor()
+        cur.execute("PRAGMA journal_mode=WAL")
+        cur.execute("PRAGMA busy_timeout=30000")
+        cur.close()
 SessionLocal = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
 
 

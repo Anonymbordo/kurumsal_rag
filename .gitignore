@@ -20,3 +20,5 @@ frontend/public/brand/*
 
 # Yerelde eğitilen modeller
 backend/models/
+*.db-wal
+*.db-shm
