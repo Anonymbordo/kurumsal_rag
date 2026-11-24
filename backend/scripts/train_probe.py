@@ -21,6 +21,7 @@ Kullanım (backend klasöründen):
 Sonra: python scripts/evaluate.py --verbose
 """
 import argparse
+import re
 import json
 import os
 import sys
@@ -76,6 +77,37 @@ def load_db_labels(db_path: Path, test_texts: list[str]) -> tuple[list[str], lis
     return X, y
 
 
+_LABEL_FIRST = re.compile(r"^\s*([01])\s*[\t;|,]?\s+(.+?)\s*$")
+_LABEL_LAST = re.compile(r"^\s*(.+?)\s*[\t;|,]?\s+([01])\s*$")
+
+
+def parse_line(line: str) -> tuple[str, str] | None:
+    """Etiketli satır: "1<TAB>cümle" (etiketleme aracı) ya da "cümle<TAB>1" (Gemini çıktısı).
+    Kopyalarken TAB boşluğa dönüşmüş olabilir; tırnak ve madde işareti temizlenir."""
+    if not line.strip() or line.lstrip().startswith("#"):
+        return None
+    if "\t" in line:
+        a, b = line.split("\t", 1)
+        a, b = a.strip(), b.strip()
+        if a in ("0", "1"):
+            lab, text = a, b
+        elif b in ("0", "1"):
+            lab, text = b, a
+        else:
+            return None
+    else:
+        m = _LABEL_FIRST.match(line) or None
+        if m:
+            lab, text = m.group(1), m.group(2)
+        else:
+            m = _LABEL_LAST.match(line)
+            if not m:
+                return None
+            text, lab = m.group(1), m.group(2)
+    text = re.sub(r"^\s*(?:[-•*]|\d+[.)])\s+", "", text).strip().strip('"“”\'').strip()
+    return (lab, text) if len(text) >= 8 else None
+
+
 def load_base(db_path: Path | None = None) -> tuple[list[str], list[int]]:
     from app.ml.prototypes import MODALITY_PAIRS, NON_TASK_EXAMPLES, TASK_EXAMPLES
 
@@ -83,12 +115,12 @@ def load_base(db_path: Path | None = None) -> tuple[list[str], list[int]]:
     X, y = [], []
     for f in sorted((ROOT / "samples" / "train").glob("*.tsv")):
         n = 0
-        for line in f.read_text(encoding="utf-8").splitlines():
-            if not line.strip() or line.startswith("#") or "\t" not in line:
+        for line in f.read_text(encoding="utf-8-sig").splitlines():
+            parsed = parse_line(line)
+            if parsed is None:
                 continue
-            lab, text = line.split("\t", 1)
-            text = text.strip()
-            if lab.strip() not in ("0", "1") or any(text in t for t in test_texts):
+            lab, text = parsed
+            if any(text in t for t in test_texts):
                 continue
             X.append(text)
             y.append(int(lab))
