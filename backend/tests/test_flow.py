@@ -200,3 +200,14 @@ def test_dashboard(client):
     assert counts[1] >= counts[2] >= counts[3] >= counts[4]
     assert d["load"] and all(r["total"] == r["base"] + r["added"] for r in d["load"] if r["added"] > 0)
     assert client.get("/api/dashboard", headers=AYSE).status_code == 403
+
+
+def test_labeling_does_not_overwrite_test_docs(client, tmp_path, monkeypatch):
+    import app.routers.labeling as lab
+
+    monkeypatch.setattr(lab, "_samples", lambda: tmp_path / "samples")
+    body = {"title": "", "text": "Ali raporu hazırlamalı.", "sentences": ["Ali raporu hazırlamalı."], "labels": ["task"], "split": "test"}
+    a = client.post("/api/labeling/save", json=body, headers=LEAD).json()["saved"]
+    b = client.post("/api/labeling/save", json={**body, "text": "Veli testleri koşmalı.", "sentences": ["Veli testleri koşmalı."]}, headers=LEAD).json()["saved"]
+    c = client.post("/api/labeling/save", json=body, headers=LEAD).json()["saved"]  # aynı metin: aynı dosya
+    assert a != b and a == c

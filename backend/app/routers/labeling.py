@@ -74,6 +74,19 @@ class SaveBody(BaseModel):
     labels: list[Literal["task", "not_task", "ambiguous"]]
 
 
+def _free_name(d, stem: str, ext: str, same_text: str | None = None):
+    """Aynı adlı dosya varsa üzerine yazma: _2, _3 ... ekle. (Aynı metin yeniden etiketleniyorsa aynı dosya.)"""
+    n = 1
+    while True:
+        name = f"{stem}{'' if n == 1 else f'_{n}'}{ext}"
+        p = d / name
+        if not p.exists():
+            return name
+        if same_text is not None and p.read_text(encoding="utf-8") == same_text:
+            return name
+        n += 1
+
+
 @router.post("/save")
 def save(body: SaveBody, user: User = Depends(require_lead)):
     if len(body.sentences) != len(body.labels):
@@ -83,14 +96,14 @@ def save(body: SaveBody, user: User = Depends(require_lead)):
     if body.split == "train":
         d = root / "train"
         d.mkdir(parents=True, exist_ok=True)
-        path = d / f"etiket_{slug}.tsv"
+        path = d / _free_name(d, f"etiket_{slug}", ".tsv")
         lines = ["# etiketleme aracıyla kaydedildi — 1: görev, 0: görev değil (belirsizler atlandı)"]
         lines += [f"{1 if l == 'task' else 0}\t{s}" for s, l in zip(body.sentences, body.labels) if l != "ambiguous"]
         path.write_text("\n".join(lines) + "\n", encoding="utf-8")
     else:
         d = root / "test"
         d.mkdir(parents=True, exist_ok=True)
-        fname = f"{slug}.txt"
+        fname = _free_name(d, slug, ".txt", same_text=body.text)
         (d / fname).write_text(body.text, encoding="utf-8")
         gold_path = d / "gold.json"
         gold = json.loads(gold_path.read_text(encoding="utf-8")) if gold_path.exists() else {}
