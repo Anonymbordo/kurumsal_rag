@@ -17,7 +17,8 @@ SCRIPTS = {
 class FakeASR:
     name = "fake"
 
-    def transcribe(self, path):
+    def transcribe(self, path, prompt=""):
+        assert "Ayşe Kaya" in prompt and "regresyon" in prompt
         uid = path.rsplit("_", 1)[1].split(".")[0]
         return SCRIPTS[uid]
 
@@ -73,3 +74,11 @@ def test_non_participant_cannot_see(client):
     m = client.post("/api/meetings", json={"title": "Gizli", "participants": ["ayse"]}, headers=LEAD).json()
     assert client.get(f"/api/meetings/{m['id']}", headers=MERT).status_code == 403
     assert all(x["id"] != m["id"] for x in client.get("/api/meetings", headers=MERT).json())
+
+
+def test_report_flags_ungrounded_lines():
+    report = "## Özet\nAyşe fatura zaman aşımını düzeltecek.\n- Yeni canlılar oluşturulması ve eğitim desteği sağlanması önerildi."
+    transcript = "Ayşe Kaya: Fatura dışa aktarma zaman aşımını ben yarın düzeltirim."
+    out, n = svc.flag_ungrounded(report, transcript)
+    assert n == 1 and "canlılar oluşturulması ve eğitim desteği sağlanması önerildi. ⚠️" in out
+    assert "düzeltecek." in out.split("\n")[1] and "⚠️" not in out.split("\n")[1]

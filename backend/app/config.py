@@ -52,7 +52,12 @@ class Settings(BaseSettings):
     whisper_model: str = "small"  # faster-whisper: tiny | base | small | medium | large-v3
     whisper_compute: str = "int8"  # CPU için 8-bit kuantizasyon
     whisper_language: str = "tr"
-    keep_audio: bool = False  # transkript sonrası ses dosyaları silinsin (KVKK: veri minimizasyonu)
+    whisper_beam_size: int = 5  # 1: hızlı; 5: daha doğru (toplantı sonrası arka planda çalışır)
+    keep_audio: bool = False
+    timezone: str = "Europe/Istanbul"
+    # Konuşma tanımaya ipucu: kurumun sık kullandığı terimler (virgülle). Katılımcı adları ve
+    # ekibin görev başlıklarındaki terimler otomatik eklenir.
+    whisper_hotwords: str = "sprint, deploy, canlı ortam, staging, regresyon testi, API, backend, frontend, iOS, Android, pull request, code review, Jira, CI/CD, veritabanı, bug, hotfix, sürüm"  # transkript sonrası ses dosyaları silinsin (KVKK: veri minimizasyonu)
 
     # Sprint kapasitesi (kişi başı iş günü) — yük yüzdesi bunun üzerinden hesaplanır.
     sprint_capacity_days: float = 10.0

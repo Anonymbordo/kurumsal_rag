@@ -10,6 +10,7 @@
      (kaynaklı, lider onayına bağlı). Decoder yoksa rapor dökümden derlenir.
 """
 import os
+import re
 import threading
 import time
 import traceback
@@ -64,6 +65,18 @@ def transcript_text(m: Meeting) -> str:
     return "\n".join(lines)
 
 
+def local_time(dt) -> str:
+    """UTC kaydı kurumun saat dilimine çevirir (GA_TIMEZONE)."""
+    from datetime import timezone
+    try:
+        from zoneinfo import ZoneInfo
+
+        tz = ZoneInfo(get_settings().timezone)
+        return dt.replace(tzinfo=timezone.utc).astimezone(tz).strftime("%d.%m.%Y %H:%M")
+    except Exception:  # noqa: BLE001 — Windows'ta tzdata yoksa
+        return dt.strftime("%d.%m.%Y %H:%M") + " UTC"
+
+
 # --- Rapor ----------------------------------------------------------------
 NOTES_PROMPT = """Aşağıda bir iş toplantısının dökümünden bir bölüm var. Bu bölümdeki önemli bilgileri, alınan kararları ve kimin ne yapacağını Türkçe, kısa maddeler halinde çıkar. Dökümde olmayan hiçbir şey ekleme. Kişi adlarını aynen koru.
 
@@ -97,27 +110,92 @@ def _chunks(lines: list[str], size: int = CHUNK_CHARS) -> list[str]:
     return out
 
 
+MIN_WORDS_FOR_SUMMARY = 60  # bundan kısa dökümde özet yazdırmak uydurmaya davetiye
+SHORT_TRANSCRIPT_CHARS = 2500  # bundan kısa döküm tek aşamada raporlanır (not aşaması uydurmayı katlıyor)
+
+DIRECT_PROMPT = """Aşağıda "{title}" toplantısının dökümü var. Döküm otomatik konuşma tanımayla üretildi; anlamı belirsiz kelimeler olabilir.
+Türkçe kısa bir rapor yaz. KURALLAR:
+- Yalnızca dökümde açıkça söylenenleri yaz. Tahmin etme, yorum katma, boşluk doldurma.
+- Anlamı belirsiz bir ifadeyi düzeltmeye çalışma; atla.
+- Kişi adlarını aynen koru.
+Şu başlıkları kullan, başka başlık ekleme:
+## Özet
+(1-3 cümle)
+## Alınan kararlar
+(madde madde; dökümde açık karar yoksa "Dökümde açık bir karar yok.")
+## Açık konular
+(madde madde; yoksa "Yok.")
+
+DÖKÜM:
+{transcript}"""
+
+
+_STEM = re.compile(r"[a-zçğıöşü0-9]{4,}")
+_STOP = {"toplantı", "döküm", "dökümde", "yapılacak", "olarak", "ayrıca", "üzerinde", "konusunda", "edilmiştir",
+         "yapılmıştır", "belirtilmiştir", "önerilmiştir", "görüşülmüştür", "karar", "kararı", "alınan", "açık",
+         "konular", "özet", "için", "gibi", "daha", "olan", "olduğu", "ilgili", "yeni", "bulunmuştur"}
+
+
+def _stems(text: str) -> set[str]:
+    low = text.replace("I", "ı").replace("İ", "i").lower()
+    return {w[:5] for w in _STEM.findall(low) if w not in _STOP}
+
+
+def grounding(line: str, source_stems: set[str]) -> float:
+    """Rapor cümlesindeki içerik kelimelerinin (5 harflik kök) ne kadarı dökümde geçiyor?
+    Basit ama açıklanabilir bir uydurma göstergesi: dökümde olmayan kavramlar düşük oran verir."""
+    st = _stems(line)
+    return 1.0 if not st else len(st & source_stems) / len(st)
+
+
+def flag_ungrounded(report: str, transcript: str, threshold: float = 0.6) -> tuple[str, int]:
+    """Dökümde dayanağı zayıf rapor satırlarını işaretler."""
+    src = _stems(transcript)
+    out, flagged = [], 0
+    for line in report.split("\n"):
+        body = line.strip().lstrip("-*").strip()
+        if body and not body.startswith("#") and len(_stems(body)) >= 3 and grounding(body, src) < threshold:
+            line = line.rstrip() + " ⚠️ _dökümde dayanağı zayıf_"
+            flagged += 1
+        out.append(line)
+    return "\n".join(out), flagged
+
+
 def llm_summary(m: Meeting, on_progress=lambda s: None) -> str | None:
-    """Uzun dökümler için iki aşama (map-reduce): parça parça not çıkar, sonra raporu yaz."""
+    """Kısa dökümde tek aşama, uzun dökümde iki aşama (map-reduce). Her rapor satırı dökümle
+    karşılaştırılır; dayanağı zayıf satırlar işaretlenir."""
     dec = get_decoder()
     if dec is None:
         return None
-    lines = [f"[{fmt_ts(u['start'])}] {u['speaker']}: {u['text']}" for u in m.transcript]
-    parts = _chunks(lines)
+    lines = [f"{u['speaker']}: {u['text']}" for u in m.transcript]
+    full = "\n".join(lines)
+    if len(full.split()) < MIN_WORDS_FOR_SUMMARY:
+        return ("## Özet\nDöküm çok kısa olduğu için dil modeline özet yazdırılmadı "
+                f"({len(full.split())} kelime). Döküm sekmesine bakın.")
     try:
-        notes = []
-        for i, chunk in enumerate(parts, 1):
-            on_progress(f"Rapor yazılıyor: döküm bölümü {i}/{len(parts)}")
-            g = dec.generate("Sen bir toplantı not tutucususun.", [ChatTurn("user", NOTES_PROMPT.format(chunk=chunk))],
-                             max_tokens=350, num_ctx=4096)
-            notes.append(g.text)
-        on_progress("Rapor yazılıyor: son düzenleme")
-        g = dec.generate(
-            "Sen bir toplantı raporu yazarısın.",
-            [ChatTurn("user", REPORT_PROMPT.format(title=m.title, notes="\n".join(notes)))],
-            max_tokens=500, num_ctx=4096,
-        )
-        return g.text.strip() + f"\n\n_Rapor yerel dil modeliyle ({dec.model}) dökümden üretildi; kararları dökümle karşılaştırın._"
+        if len(full) <= SHORT_TRANSCRIPT_CHARS:
+            on_progress("Rapor yazılıyor…")
+            g = dec.generate("Sen titiz bir toplantı raporu yazarısın; yalnızca dökümdekini yazarsın.",
+                             [ChatTurn("user", DIRECT_PROMPT.format(title=m.title, transcript=full))],
+                             max_tokens=400, num_ctx=4096, temperature=0.0)
+            text = g.text.strip()
+        else:
+            notes = []
+            parts = _chunks(lines)
+            for i, chunk in enumerate(parts, 1):
+                on_progress(f"Rapor yazılıyor: döküm bölümü {i}/{len(parts)}")
+                g = dec.generate("Sen bir toplantı not tutucususun.", [ChatTurn("user", NOTES_PROMPT.format(chunk=chunk))],
+                                 max_tokens=350, num_ctx=4096, temperature=0.0)
+                notes.append(g.text)
+            on_progress("Rapor yazılıyor: son düzenleme")
+            g = dec.generate("Sen bir toplantı raporu yazarısın.",
+                             [ChatTurn("user", REPORT_PROMPT.format(title=m.title, notes="\n".join(notes)))],
+                             max_tokens=500, num_ctx=4096, temperature=0.0)
+            text = g.text.strip()
+        text, flagged = flag_ungrounded(text, full)
+        note = f"_Özet yerel dil modeliyle ({dec.model}) dökümden üretildi."
+        note += f" {flagged} satırın dökümde dayanağı zayıf, kontrol edin._" if flagged else " Kararları dökümle karşılaştırın._"
+        return text + "\n\n" + note
     except DecoderUnavailable:
         return None
 
@@ -129,7 +207,7 @@ def build_report(db: Session, m: Meeting, summary: str | None, tasks: list[Task]
     for u in m.transcript:
         talk[u["speaker"]] = talk.get(u["speaker"], 0.0) + max(0.0, u["end"] - u["start"])
 
-    out = [f"# {m.title}", f"Tarih: {m.started_at:%d.%m.%Y %H:%M} UTC · Süre: {int(dur.total_seconds() // 60)} dk"]
+    out = [f"# {m.title}", f"Tarih: {local_time(m.started_at)} · Süre: {max(1, round(dur.total_seconds() / 60))} dk"]
     if talk:
         out.append("Konuşanlar: " + ", ".join(f"{k} ({int(v // 60)} dk {int(v % 60)} sn)" for k, v in sorted(talk.items(), key=lambda x: -x[1])))
     out.append("")
@@ -149,6 +227,15 @@ def build_report(db: Session, m: Meeting, summary: str | None, tasks: list[Task]
 
 
 # --- İşleme ---------------------------------------------------------------
+def asr_prompt(db: Session, m: Meeting) -> str:
+    """Whisper'a ipucu: toplantı konusu, katılımcı adları, kurum terimleri (≈200 token sınırı)."""
+    names = [u.name for u in db.scalars(select(User).where(User.id.in_(m.participants or [])))]
+    hot = [w.strip() for w in get_settings().whisper_hotwords.split(",") if w.strip()]
+    text = f"Toplantı: {m.title}. Katılımcılar: {', '.join(names)}. Konular: {', '.join(hot)}."
+    return text[:700]
+
+
+
 def _set(db: Session, m: Meeting, progress: str) -> None:
     m.progress = progress
     db.commit()
@@ -166,10 +253,11 @@ def process(meeting_id: int) -> None:
                 raise RuntimeError("Toplantıda hiç ses kaydı yok. Katılımcılar 'Kaydı başlat' demeli.")
             _set(db, m, "Konuşma tanıma modeli yükleniyor…")
             asr = get_transcriber()
+            prompt = asr_prompt(db, m)
             segs: list[dict] = []
             for i, r in enumerate(recs, 1):
                 _set(db, m, f"Yazıya dökülüyor: {r.speaker} ({i}/{len(recs)})")
-                for s in asr.transcribe(r.path):
+                for s in asr.transcribe(r.path, prompt):
                     segs.append({"user_id": r.user_id, "speaker": r.speaker,
                                  "start": round(r.offset_s + s.start, 2), "end": round(r.offset_s + s.end, 2), "text": s.text})
             m.transcript = merge_segments(segs)

@@ -24,7 +24,7 @@ class Segment:
 class Transcriber(Protocol):
     name: str
 
-    def transcribe(self, path: str) -> list[Segment]: ...
+    def transcribe(self, path: str, prompt: str = "") -> list[Segment]: ...
 
 
 class TranscriberUnavailable(RuntimeError):
@@ -70,7 +70,7 @@ def decode_audio(path: str):
 
 
 class FasterWhisper:
-    def __init__(self, model: str, compute_type: str, language: str):
+    def __init__(self, model: str, compute_type: str, language: str, beam_size: int = 5):
         try:
             from faster_whisper import WhisperModel
         except ImportError as e:  # isteğe bağlı bağımlılık
@@ -79,9 +79,12 @@ class FasterWhisper:
             ) from e
         self.name = f"faster-whisper {model} ({compute_type})"
         self.language = language
+        self.beam_size = beam_size
         self.model = WhisperModel(model, device="cpu", compute_type=compute_type)
 
-    def transcribe(self, path: str) -> list[Segment]:
+    def transcribe(self, path: str, prompt: str = "") -> list[Segment]:
+        """`prompt`: kurum terimleri ve katılımcı adları. Whisper'ın decoder'ı bunu önceki bağlam
+        sayar; "deploy", "regresyon", kişi adları gibi kelimeleri doğru yazma olasılığı artar."""
         audio = decode_audio(path)
         if audio.size < SAMPLE_RATE // 2:  # yarım saniyeden kısa: konuşma yok
             return []
@@ -89,8 +92,9 @@ class FasterWhisper:
             audio,
             language=self.language,
             vad_filter=True,  # sessizliği atla: hem hız hem "sessizlikte uydurma" önlemi
-            beam_size=1,  # açgözlü çözme: CPU'da ~2 kat hızlı, kalite farkı küçük
+            beam_size=self.beam_size,  # toplantı sonrası arka planda çalıştığı için kalite öncelikli
             condition_on_previous_text=False,  # tekrar döngülerini (halüsinasyon) azaltır
+            initial_prompt=prompt or None,
         )
         return [Segment(s.start, s.end, s.text.strip()) for s in segments if s.text.strip()]
 
@@ -98,4 +102,4 @@ class FasterWhisper:
 @lru_cache
 def get_transcriber() -> Transcriber:
     s = get_settings()
-    return FasterWhisper(s.whisper_model, s.whisper_compute, s.whisper_language)
+    return FasterWhisper(s.whisper_model, s.whisper_compute, s.whisper_language, s.whisper_beam_size)
