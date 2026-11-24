@@ -190,3 +190,13 @@ def test_task_source_view_and_titles(client):
     other = {"X-User-Id": "can"}
     r = client.get(f"/api/tasks/{tid}/source", headers=other)
     assert r.status_code in (200, 403)  # paylaşılan dokümansa görebilir, değilse 403
+
+
+def test_dashboard(client):
+    d = client.get("/api/dashboard", headers=LEAD).json()
+    assert set(d["kpis"]) >= {"open", "due_week", "overdue", "pending", "accuracy_pct"}
+    assert [f["stage"] for f in d["funnel"]][0] == "Taranan cümle"
+    counts = [f["count"] for f in d["funnel"]]
+    assert counts[1] >= counts[2] >= counts[3] >= counts[4]
+    assert d["load"] and all(r["total"] == r["base"] + r["added"] for r in d["load"] if r["added"] > 0)
+    assert client.get("/api/dashboard", headers=AYSE).status_code == 403

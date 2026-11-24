@@ -143,3 +143,68 @@ def remove_member(uid: str, user: User = Depends(require_lead), db: Session = De
     audit.log(db, user.id, "team.remove", f"user:{uid}")
     db.commit()
     return {"removed": uid}
+
+
+@router.get("/dashboard")
+def dashboard(user: User = Depends(require_lead), db: Session = Depends(get_db)):
+    """Lider panosu: tek istekte KPI'lar, dokümandan işe akış, ekip yükü, teslim takvimi, model güvenilirliği."""
+    from datetime import date, timedelta
+
+    from ..llm.text import split_sentences
+
+    today = date.today()
+    tasks = list(db.scalars(select(Task).where(Task.team_id == user.team_id)))
+    members = list(db.scalars(select(User).where(User.team_id == user.team_id, User.is_lead.is_(False)).order_by(User.name)))
+    docs = list(db.scalars(select(Document).where(Document.team_id == user.team_id)))
+
+    open_ = [t for t in tasks if t.status in ("accepted", "exported")]
+    overdue = [t for t in open_ if t.due_date and t.due_date < today]
+    due_week = [t for t in open_ if t.due_date and today <= t.due_date <= today + timedelta(days=7)]
+    pending = [t for t in tasks if t.status in ("suggested", "candidate", "announcement")]
+    decided = _decided(db, user.team_id)
+    unchanged = sum(1 for t in decided if t.assignee_id == t.suggested_assignee_id)
+
+    real = [t for t in tasks if t.kind != "announcement"]
+    funnel = [
+        {"stage": "Taranan cümle", "count": sum(len(split_sentences(d.text)) for d in docs)},
+        {"stage": "Görev önerisi", "count": sum(1 for t in real if t.status not in ("candidate", "dismissed"))},
+        {"stage": "Lider onayı", "count": sum(1 for t in real if t.status in ("accepted", "exported", "done"))},
+        {"stage": "İş takibine aktarıldı", "count": sum(1 for t in real if t.status in ("exported", "done"))},
+        {"stage": "Tamamlandı", "count": sum(1 for t in real if t.status == "done")},
+    ]
+
+    load = []
+    for u in members:
+        total = load_pct(db, u)
+        base = base_pct(u)
+        load.append({"id": u.id, "name": u.name, "role": u.role, "base": base, "added": max(0, total - base), "total": total})
+
+    horizon = today + timedelta(days=13)
+    names = {u.id: u.name for u in members}
+    schedule = [
+        {
+            "id": t.id, "key": t.key or f"#{t.id}", "title": S.display_title(t),
+            "assignee_id": t.assignee_id, "assignee": names.get(t.assignee_id or "", "—"),
+            "due": t.due_date.isoformat(), "overdue": t.due_date < today,
+        }
+        for t in open_
+        if t.due_date and t.due_date <= horizon and t.assignee_id in names
+    ]
+
+    return {
+        "today": today.isoformat(),
+        "kpis": {
+            "open": len(open_),
+            "due_week": len(due_week),
+            "overdue": len(overdue),
+            "pending": len(pending),
+            "accuracy_pct": round(unchanged / len(decided) * 100) if decided else None,
+            "decided": len(decided),
+        },
+        "funnel": funnel,
+        "load": load,
+        "limit": CAPACITY_LIMIT_PCT,
+        "schedule": schedule,
+        "accuracy": accuracy(user, db),
+        "members": [{"id": u.id, "name": u.name, "role": u.role} for u in members],
+    }

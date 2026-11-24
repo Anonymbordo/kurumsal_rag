@@ -2,6 +2,7 @@ import type {
   AccuracyRow,
   ChatMessage,
   Conversation,
+  Dashboard,
   DocListItem,
   MeetingDetail,
   MeetingInfo,
@@ -142,6 +143,7 @@ export const api = {
 
   teamMembers: () => request<User[]>('/api/team/members'),
 
+  dashboard: () => request<Dashboard>('/api/dashboard'),
   taskSource: (id: number) => request<TaskSource>(`/api/tasks/${id}/source`),
   meetings: () => request<MeetingInfo[]>('/api/meetings'),
   meeting: (id: number) => request<MeetingDetail>(`/api/meetings/${id}`),

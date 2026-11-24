@@ -96,6 +96,14 @@ export function Sidebar() {
             <span className="meta">{g.member_count}</span>
           </div>
         ))}
+        {me?.is_lead && (
+          <NavLink to="/pano" className={({ isActive }) => `navitem${isActive ? ' active' : ''}`}>
+            <span className="chip-sq" style={{ background: '#eef1f5' }} aria-hidden="true">
+              <IconCheckBox size={14} />
+            </span>
+            <span className="grow">Ekip panosu</span>
+          </NavLink>
+        )}
         <NavLink to="/toplantilar" className={({ isActive }) => `navitem${isActive ? ' active' : ''}`}>
           <span className="chip-sq" style={{ background: '#eef1f5' }} aria-hidden="true">
             <IconUsers size={14} />

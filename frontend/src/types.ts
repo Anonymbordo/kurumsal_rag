@@ -194,3 +194,14 @@ export interface TaskSource {
   end: number
   ref: string
 }
+
+export interface Dashboard {
+  today: string
+  kpis: { open: number; due_week: number; overdue: number; pending: number; accuracy_pct: number | null; decided: number }
+  funnel: { stage: string; count: number }[]
+  load: { id: string; name: string; role: string; base: number; added: number; total: number }[]
+  limit: number
+  schedule: { id: number; key: string; title: string; assignee_id: string; assignee: string; due: string; overdue: boolean }[]
+  accuracy: { level: number; label: string; total: number; unchanged_pct: number | null }[]
+  members: { id: string; name: string; role: string }[]
+}

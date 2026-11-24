@@ -4,6 +4,7 @@ import { AppProvider } from './context'
 import Chat from './pages/Chat'
 import Home from './pages/Home'
 import Labeling from './pages/Labeling'
+import Dashboard from './pages/Dashboard'
 import Documents from './pages/Documents'
 import Meeting from './pages/Meeting'
 import Meetings from './pages/Meetings'
@@ -26,6 +27,7 @@ export default function App() {
               <Route path="/dokuman/:id" element={<Review />} />
               <Route path="/dokumanlar" element={<Documents />} />
               <Route path="/toplantilar" element={<Meetings />} />
+              <Route path="/pano" element={<Dashboard />} />
               <Route path="/gorev/:id" element={<TaskSourceView />} />
               <Route path="/toplanti/:id" element={<Meeting />} />
               <Route path="/ekip" element={<Team />} />
