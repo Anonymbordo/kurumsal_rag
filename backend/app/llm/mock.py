@@ -6,7 +6,7 @@ bildirimleri geçen cümleleri görev olarak alır. Karşılaştırma tabanı (b
 olarak da kullanılır.
 """
 from .base import ChatTurn, ExtractedTask
-from .text import OBLIGATION, estimate_days, self_commitment, split_sentences, title_from
+from .text import OBLIGATION, estimate_days, split_sentences, spoken_commitment, title_from
 
 TAG_RULES: list[tuple[str, tuple[str, ...]]] = [
     ("backend", ("api", "servis", "uç nokta", "endpoint", "veritabanı", "backend", "limit")),
@@ -31,7 +31,7 @@ class MockProvider:
     def extract_tasks(self, document_text: str, doc_type: str) -> list[ExtractedTask]:
         tasks: list[ExtractedTask] = []
         for s in split_sentences(document_text):
-            if not OBLIGATION.search(s.text) and not (doc_type == "meeting" and self_commitment(s.text)):
+            if not OBLIGATION.search(s.text) and not spoken_commitment(document_text, s.text, s.start):
                 continue
             tasks.append(
                 ExtractedTask(

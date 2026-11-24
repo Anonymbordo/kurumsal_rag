@@ -19,7 +19,7 @@ from ..ml.features import clauses, feature_matrix
 from ..ml.prototypes import MODALITY_PAIRS, NON_TASK_EXAMPLES, TAG_DESCRIPTIONS, TASK_EXAMPLES
 from .base import ChatTurn, ExtractedTask
 from .mock import MockProvider
-from .text import OBLIGATION, estimate_days, split_sentences, title_from
+from .text import spoken_commitment, OBLIGATION, estimate_days, split_sentences, title_from
 
 TOP_K = 3
 SHARPNESS = 20.0  # benzerlik farkını logit ölçeğine çeviren eğim
@@ -126,6 +126,10 @@ class EncoderProvider:
         texts = [s.text for s in sents]
         scores = self.task_scores(texts)
         threshold = self.probe["threshold"] if self.probe else THRESHOLD
+        # Toplantı dökümünde konuşanın birinci şahısla iş üstlenmesi ("bunu ben düzeltirim") güçlü
+        # bir dil sinyali; eğitim verisi yazılı metin ağırlıklı olduğu için model bunu zayıf görebilir.
+        committed = {i for i, s in enumerate(sents) if spoken_commitment(document_text, s.text, s.start)}
+        scores = [max(float(p), threshold) if i in committed else p for i, p in enumerate(scores)]
         low = threshold - get_settings().candidate_margin
         keep = [i for i, p in enumerate(scores) if p >= low]
         if not keep:

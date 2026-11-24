@@ -17,6 +17,35 @@ _SELF_PHRASE = re.compile(r"(?:^|\s)(bana kalsın|bende kalsın|ben hallederim|b
 _CLAUSE = re.compile(r"[,.;:!?]|\s(?:ve|ama|fakat|ancak|çünkü)\s")
 
 
+# Toplantı dökümü satırı "Ayşe Kaya: ..." diye başlar (konuşmacı etiketi).
+_SPEAKER_LINE = re.compile(r"^\s*([A-ZÇĞİÖŞÜ][a-zçğıöşü]+(?:[ \t]+[A-ZÇĞİÖŞÜ][a-zçğıöşü]+){0,2}):\s+")
+_NOT_SPEAKER = {"not", "nota", "hatırlatma", "genel hatırlatma", "duyuru", "bilgi", "bilgilendirme", "önemli",
+                "katılımcılar", "katılanlar", "gündem", "karar", "kararlar", "tarih", "konu", "kime", "ekip", "blocker"}
+
+
+def spoken_by(document_text: str, pos: int) -> str | None:
+    """`pos` konumundaki cümle bir konuşmacı satırındaysa konuşanın adı."""
+    if pos is None or pos < 0:
+        return None
+    line_start = document_text.rfind("\n", 0, pos) + 1
+    m = _SPEAKER_LINE.match(document_text[line_start: line_start + 80])
+    if not m or m.group(1).replace("I", "ı").replace("İ", "i").lower() in _NOT_SPEAKER:
+        return None
+    return m.group(1)
+
+
+def strip_speaker_label(text: str) -> str:
+    m = _SPEAKER_LINE.match(text)
+    if m and m.group(1).replace("I", "ı").replace("İ", "i").lower() not in _NOT_SPEAKER:
+        return text[m.end():]
+    return text
+
+
+def spoken_commitment(document_text: str, sentence: str, pos: int) -> bool:
+    """Toplantı dökümünde konuşan kişi işi kendisi üstleniyor mu? ("bunu ben düzeltirim")"""
+    return spoken_by(document_text, pos) is not None and self_commitment(strip_speaker_label(sentence))
+
+
 def self_commitment(text: str) -> bool:
     low = text.replace("I", "ı").replace("İ", "i").lower()
     if _SELF_PHRASE.search(low):
