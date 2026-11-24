@@ -40,6 +40,43 @@ export class ApiError extends Error {
   }
 }
 
+/** Akışlı sohbet cevabı: NDJSON satırlarını okur, her parçada onDelta çağrılır. */
+async function streamMessage(
+  id: number,
+  text: string,
+  onDelta: (piece: string) => void,
+): Promise<ChatMessage[]> {
+  const headers = new Headers({ 'Content-Type': 'application/json' })
+  const uid = getUserId()
+  if (uid) headers.set('X-User-Id', uid)
+  const res = await fetch(`/api/conversations/${id}/messages/stream`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({ text }),
+  })
+  if (!res.ok || !res.body) throw new ApiError(res.status, `İstek başarısız (${res.status})`)
+  const reader = res.body.getReader()
+  const dec = new TextDecoder()
+  let buf = ''
+  let done: ChatMessage[] | null = null
+  for (;;) {
+    const { value, done: end } = await reader.read()
+    if (value) buf += dec.decode(value, { stream: true })
+    let nl: number
+    while ((nl = buf.indexOf('\n')) >= 0) {
+      const line = buf.slice(0, nl).trim()
+      buf = buf.slice(nl + 1)
+      if (!line) continue
+      const ev = JSON.parse(line) as { type: 'delta'; text: string } | { type: 'done'; messages: ChatMessage[] }
+      if (ev.type === 'delta') onDelta(ev.text)
+      else done = ev.messages
+    }
+    if (end) break
+  }
+  if (!done) throw new ApiError(500, 'Cevap yarıda kesildi')
+  return done
+}
+
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   const headers = new Headers(init.headers)
   const uid = getUserId()
@@ -70,8 +107,9 @@ export const api = {
   myTasks: () => request<Task[]>('/api/tasks/mine'),
 
   conversations: () => request<Conversation[]>('/api/conversations'),
-  startConversation: (text: string) =>
-    post<{ conversation: Conversation; messages: ChatMessage[] }>('/api/conversations', { text }),
+  startConversation: (text: string, defer = false) =>
+    post<{ conversation: Conversation; messages: ChatMessage[] }>('/api/conversations', { text, defer }),
+  streamMessage,
   messages: (id: number) =>
     request<{ conversation: Conversation; messages: ChatMessage[] }>(`/api/conversations/${id}/messages`),
   send: (id: number, text: string) => post<{ messages: ChatMessage[] }>(`/api/conversations/${id}/messages`, { text }),

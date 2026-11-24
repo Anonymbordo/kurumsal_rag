@@ -40,7 +40,11 @@ class Settings(BaseSettings):
     decoder_model: str = "qwen2.5:3b"
     decoder_timeout: float = 120.0
     decoder_logprobs: bool = True  # token olasılıklarını iste (destekleyen Ollama sürümlerinde)
-    rag_top_k: int = 6  # decoder'a verilecek en fazla kayıt
+    decoder_keep_alive: str = "30m"  # model bu süre boşta kalsa da bellekte tutulur (yeniden yükleme yok)
+    decoder_num_ctx: int = 2048  # bağlam penceresi; küçük pencere = daha az bellek, daha hızlı
+    decoder_max_tokens: int = 256  # cevap uzunluk sınırı
+    decoder_warmup: bool = True  # uygulama açılırken modeli belleğe yükle
+    rag_top_k: int = 4  # decoder'a verilecek en fazla kayıt (prompt kısa = prefill hızlı)
 
     # Sprint kapasitesi (kişi başı iş günü) — yük yüzdesi bunun üzerinden hesaplanır.
     sprint_capacity_days: float = 10.0

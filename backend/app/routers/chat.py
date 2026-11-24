@@ -1,15 +1,18 @@
 from datetime import datetime
 
+import json
+
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from .. import serialize as S
-from ..db import get_db
+from ..db import SessionLocal, get_db
 from ..deps import current_user
 from ..models import Conversation, Message, User
-from ..services.assistant import answer
+from ..services.assistant import Pending, Reply, answer, plan
 from ..timeutil import utcnow
 
 router = APIRouter(prefix="/api/conversations", tags=["sohbet"])
@@ -17,6 +20,8 @@ router = APIRouter(prefix="/api/conversations", tags=["sohbet"])
 
 class NewMessage(BaseModel):
     text: str = Field(min_length=1, max_length=8000)
+    # true: sohbeti cevapsız oluştur; cevap sohbet ekranında akışla (/stream) alınır
+    defer: bool = False
 
 
 def _own(db: Session, conv_id: int, user: User) -> Conversation:
@@ -37,8 +42,13 @@ def start(body: NewMessage, user: User = Depends(current_user), db: Session = De
     """İlk mesajla yeni sohbet başlatır ve asistanın yanıtını döner."""
     # Cevap (dil modeli çağrısı uzun sürebilir) veritabanına yazmadan ÖNCE hesaplanır;
     # böylece yazma kilidi model beklenirken tutulmaz.
-    reply = answer(db, user, body.text, [])
     title = body.text.strip().split("\n")[0]
+    if body.defer:
+        conv = Conversation(user_id=user.id, title=title[:60] + ("…" if len(title) > 60 else ""))
+        db.add(conv)
+        db.commit()
+        return {"conversation": S.conversation(conv), "messages": []}
+    reply = answer(db, user, body.text, [])
     conv = Conversation(user_id=user.id, title=title[:60] + ("…" if len(title) > 60 else ""))
     db.add(conv)
     db.flush()
@@ -68,3 +78,29 @@ def _save(db: Session, conv: Conversation, text: str, reply) -> list[dict]:
     conv.updated_at = utcnow()
     db.commit()
     return [S.message(user_msg), S.message(bot_msg)]
+
+
+@router.post("/{conv_id}/messages/stream")
+def post_message_stream(conv_id: int, body: NewMessage, user: User = Depends(current_user), db: Session = Depends(get_db)):
+    """Cevabı akışla döner (NDJSON satırları):
+    {"type":"delta","text":"..."} ... {"type":"done","messages":[kullanıcı, asistan]}
+    Kullanıcı ilk kelimeyi model bitirmeden görür; toplam süre aynı, beklenen süre kısalır.
+    """
+    conv = _own(db, conv_id, user)
+    history = list(db.scalars(select(Message).where(Message.conversation_id == conv.id).order_by(Message.id)))
+    planned = plan(db, user, body.text, history)
+    cid, text = conv.id, body.text
+
+    def events():
+        reply = planned
+        if isinstance(planned, Pending):
+            for item in planned.stream():
+                if isinstance(item, Reply):
+                    reply = item
+                else:
+                    yield json.dumps({"type": "delta", "text": item}, ensure_ascii=False) + "\n"
+        with SessionLocal() as s:  # istek oturumu kapanmış olabilir; kayıt için yeni oturum
+            msgs = _save(s, s.get(Conversation, cid), text, reply)
+        yield json.dumps({"type": "done", "messages": msgs}, ensure_ascii=False, default=str) + "\n"
+
+    return StreamingResponse(events(), media_type="application/x-ndjson")

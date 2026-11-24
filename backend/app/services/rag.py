@@ -35,7 +35,7 @@ def _embedder():
     return getattr(get_provider(), "embedder", None) or HashingEmbedder()
 
 
-def doc_context(doc: Document | None, start: int, end: int, n: int = 2) -> tuple[str, str]:
+def doc_context(doc: Document | None, start: int, end: int, n: int = 1) -> tuple[str, str]:
     """Görev cümlesinden önceki ve sonraki n cümle."""
     if doc is None or start < 0:
         return "", ""
@@ -101,39 +101,52 @@ def retrieve(db: Session, me: User, question: str, tasks: list[Task], users: dic
     return out
 
 
-SYSTEM = """Sen {org} kurumunun iç görev asistanısın. Çalışana kendi görevleri ve onunla paylaşılan dokümanlar hakkında yardım ediyorsun.
-Kurallar:
-- Yalnızca aşağıdaki KAYITLAR'daki bilgiyi kullan. Kayıtlarda olmayan bir şeyi uydurma; bilgi yoksa "Bu bilgi kayıtlarda yok." de.
-- Kullandığın her bilginin cümlesinin sonuna kaynağını [K1] biçiminde yaz.
-- Türkçe, kısa ve net yaz. Gerekirse en fazla 5 maddelik adım listesi ver.
-- Görevin kime ve neden verildiğini sorarlarsa gerekçeleri kayıttaki gibi aktar, yorum katma.
-Bugünün tarihi: {today}
+# Sabit talimatlar başta, değişen kayıtlar sonda: aynı önek tekrar işlenmez (önek önbelleği).
+SYSTEM = """Sen {org} kurumunun iç görev asistanısın.
+Kurallar: Yalnızca KAYITLAR'daki bilgiyi kullan; yoksa "Bu bilgi kayıtlarda yok." de. Uydurma.
+Her bilginin sonuna kaynağını [K1] biçiminde yaz. Türkçe, kısa yaz; gerekirse en fazla 4 madde.
+Bugün: {today}
 
 KAYITLAR:
 {records}"""
 
+MAX_RECORD_CHARS = 420  # her kayıt en fazla bu kadar karakter: istem kısa = prefill hızlı
+
+
+def _clip(text: str, n: int = MAX_RECORD_CHARS) -> str:
+    return text if len(text) <= n else text[: n - 1].rsplit(" ", 1)[0] + "…"
+
 
 def build_system(records: list[Record], org: str) -> str:
-    body = "\n\n".join(f"[K{i + 1}] {r.text}" for i, r in enumerate(records)) or "(kayıt yok)"
+    body = "\n".join(f"[K{i + 1}] {_clip(r.text)}" for i, r in enumerate(records)) or "(kayıt yok)"
     return SYSTEM.format(org=org, today=date.today().isoformat(), records=body)
+
+
+def prepare(question: str, records: list[Record], history: list[Message]) -> tuple[str, list[ChatTurn]]:
+    turns = [ChatTurn(m.role, _clip(m.text, 300)) for m in history[-2:] if m.text]
+    turns.append(ChatTurn("user", question))
+    return build_system(records, get_settings().org_name), turns
+
+
+def finalize(decoder: OllamaDecoder, g: Generation, records: list[Record]) -> tuple[str, list[str]]:
+    """Kaynak numaralarını etikete çevirir; süre ve olasılık bilgisini ekler."""
+    cited = sorted({int(n) for n in CITE.findall(g.text) if 0 < int(n) <= len(records)})
+    text = CITE.sub(lambda m: f"[{m.group(1)}]", g.text)
+    if records and not cited:
+        text += "\n\n_Bu cevap kaynak göstermedi; kayıtlarla karşılaştırarak değerlendirin._"
+    meta = f"Model: {decoder.model} · {g.timing()}"
+    if g.mean_token_prob is not None:
+        meta += f" · ort. token olasılığı %{round(g.mean_token_prob * 100)}"
+    return text, [f"[{n}] {records[n - 1].label}" for n in cited] + [meta]
 
 
 def generate(
     decoder: OllamaDecoder, question: str, records: list[Record], history: list[Message]
 ) -> tuple[str, list[str]]:
-    """Decoder'dan cevap alır; metin ve kaynak etiketlerini döner."""
-    turns = [ChatTurn(m.role, m.text) for m in history[-4:] if m.text]
-    turns.append(ChatTurn("user", question))
+    """Akışsız üretim (testler ve akış desteklemeyen istemciler için)."""
+    system, turns = prepare(question, records, history)
     try:
-        g: Generation = decoder.generate(build_system(records, get_settings().org_name), turns)
+        g = decoder.generate(system, turns)
     except DecoderUnavailable as e:
         return f"Dil modeline şu an ulaşılamıyor ({e}).", []
-    cited = sorted({int(n) for n in CITE.findall(g.text) if 0 < int(n) <= len(records)})
-    text = CITE.sub(lambda m: f"[{m.group(1)}]", g.text)
-    if records and not cited:
-        text += "\n\n_Bu cevap kaynak göstermedi; kayıtlarla karşılaştırarak değerlendirin._"
-    meta = f"Model: {decoder.model} · {g.seconds:.1f} sn"
-    if g.mean_token_prob is not None:
-        meta += f" · ort. token olasılığı %{round(g.mean_token_prob * 100)}"
-    sources = [f"[{n}] {records[n - 1].label}" for n in cited] + [meta]
-    return text, sources
+    return finalize(decoder, g, records)

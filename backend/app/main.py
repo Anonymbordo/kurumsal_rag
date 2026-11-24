@@ -8,6 +8,7 @@ from fastapi.staticfiles import StaticFiles
 
 from .config import get_settings
 from .db import Base, SessionLocal, add_missing_columns, engine
+from .llm.decoder import warmup_in_background
 from .routers import chat, documents, labeling, org, tasks, team
 from .seed import seed
 
@@ -22,6 +23,7 @@ async def lifespan(_: FastAPI):
     if settings.seed_demo_data:
         with SessionLocal() as db:
             seed(db)
+    warmup_in_background()  # decoder açıksa modeli şimdiden belleğe yükle
     yield
 
 

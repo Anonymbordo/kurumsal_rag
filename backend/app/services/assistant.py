@@ -13,7 +13,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from ..llm import ChatTurn, get_provider
-from ..llm.decoder import get_decoder
+from ..llm.decoder import DecoderUnavailable, get_decoder
 from . import rag
 from ..models import Document, Message, Task, User
 from .load import load_pct
@@ -36,6 +36,38 @@ class Reply:
     text: str
     blocks: list = field(default_factory=list)
     sources: list = field(default_factory=list)
+
+
+@dataclass
+class Pending:
+    """Decoder'a gidecek, henüz üretilmemiş cevap. Akışla (token token) ya da tek seferde üretilir."""
+
+    decoder: object
+    system: str
+    turns: list
+    records: list
+    blocks: list = field(default_factory=list)
+    suffix: str = ""
+
+    def stream(self):
+        """Metin parçaları (str) üretir; en sonda tamamlanmış Reply döner."""
+        try:
+            gen = None
+            for item in self.decoder.stream(self.system, self.turns):
+                if isinstance(item, str):
+                    yield item
+                else:
+                    gen = item
+            text, sources = rag.finalize(self.decoder, gen, self.records)
+        except DecoderUnavailable as e:
+            text, sources = f"Dil modeline şu an ulaşılamıyor ({e}).", []
+        yield Reply(text=text + self.suffix, blocks=self.blocks, sources=sources)
+
+    def resolve(self) -> "Reply":
+        out = None
+        for item in self.stream():
+            out = item
+        return out
 
 
 def _users(db: Session) -> dict[str, User]:
@@ -79,6 +111,13 @@ def _shared_docs(db: Session, me: User, days: int = 7) -> list[Document]:
 
 
 def answer(db: Session, me: User, text: str, history: list[Message]) -> Reply:
+    """Tam cevap (akışsız)."""
+    r = plan(db, me, text, history)
+    return r.resolve() if isinstance(r, Pending) else r
+
+
+def plan(db: Session, me: User, text: str, history: list[Message]) -> "Reply | Pending":
+    """Kayıtlardan hemen cevaplanabiliyorsa Reply, decoder gerekiyorsa Pending döner."""
     q = tr_lower(text)
     users = _users(db)
     parts: list[str] = []
@@ -164,13 +203,13 @@ def answer(db: Session, me: User, text: str, history: list[Message]) -> Reply:
     decoder = get_decoder()
     if decoder is not None:
         records = rag.retrieve(db, me, text, _my_active_tasks(db, me), users)
-        answer_text, srcs = rag.generate(decoder, text, records, history)
-        return Reply(text=answer_text, sources=srcs)
+        system, turns = rag.prepare(text, records, history)
+        return Pending(decoder, system, turns, records)
     turns = [ChatTurn(m.role, m.text) for m in history] + [ChatTurn("user", text)]
     return Reply(text=get_provider().chat(turns, context=""), sources=[])
 
 
-def _explain(db: Session, me: User, text: str, history: list[Message], key: str | None, users: dict[str, User]) -> Reply:
+def _explain(db: Session, me: User, text: str, history: list[Message], key: str | None, users: dict[str, User]) -> "Reply | Pending":
     """Görevin tam cümlesi, dokümandaki bağlamı ve gerekçeleri; decoder varsa doğal dilde açıklama."""
     mine = _my_active_tasks(db, me)
     if key:
@@ -194,8 +233,8 @@ def _explain(db: Session, me: User, text: str, history: list[Message], key: str 
             r for r in rag.retrieve(db, me, t.source_quote or t.title, [], users) if r.text != t.source_quote
         ][:3]
         q = f"{t.key} görevini açıkla: ne yapmam gerekiyor, neden bana verildi, teslim ne zaman? {text}"
-        answer_text, srcs = rag.generate(decoder, q, records, history)
-        return Reply(text=answer_text + hint, blocks=[card], sources=srcs)
+        system, turns = rag.prepare(q, records, history)
+        return Pending(decoder, system, turns, records, blocks=[card], suffix=hint)
 
     doc = db.get(Document, t.document_id) if t.document_id else None
     before, after = rag.doc_context(doc, t.source_start, t.source_end)

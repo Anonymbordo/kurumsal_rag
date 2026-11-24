@@ -21,9 +21,10 @@ export default function Home() {
     setBusy(true)
     setError('')
     try {
-      const r = await api.startConversation(text)
+      // Sohbet hemen açılır; cevap sohbet ekranında akışla (kelime kelime) gelir.
+      const r = await api.startConversation(text, true)
       refreshSidebar()
-      navigate(`/c/${r.conversation.id}`)
+      navigate(`/c/${r.conversation.id}`, { state: { pending: text } })
     } catch (e) {
       setError((e as Error).message)
     } finally {
